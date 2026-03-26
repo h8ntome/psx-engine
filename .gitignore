@@ -1,0 +1,17 @@
+# Dependencies
+node_modules/
+
+# Environment
+.env
+.env.*
+
+# SQLite database (local portfolio data)
+portfolio.db
+portfolio.db-shm
+portfolio.db-wal
+
+# Scraped historical data (can be large; regenerate with scraper.js)
+data/*.json
+
+# macOS
+.DS_Store
