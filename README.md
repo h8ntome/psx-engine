@@ -10,12 +10,13 @@
 
 ## Features
 
-- **Live Market Data** — Real-time PSX tick data with candlestick charts across multiple timeframes (1m, 5m, 15m, 1h, 1d)
+- **Live Market Data** — Real-time PSX tick data with candlestick charts across multiple timeframes (1D, 1W, 1M)
+- **Auto Analysis** — When you select a symbol, technical indicators load automatically below the chart: performance metrics, moving averages, RSI gauge, volume analysis, and support/resistance levels
 - **Portfolio Tracker** — Track paper and real portfolios with live P&L calculations
 - **Backtesting Engine** — Test strategies against multi-year historical OHLC data
 - **Strategy System** — Built-in MA crossover strategy plus support for custom expression-based and JSON-defined strategies
 - **Symbol Search** — Full PSX symbol search with company name resolution
-- **Web UI** — Clean, browser-based interface — no external dependencies required at runtime
+- **Reliable CLI** — `psx-engine` starts with clear progress logs, auto-opens the browser, and handles errors (port conflicts, database lock) gracefully
 
 ---
 
@@ -86,6 +87,7 @@ Three strategy types are supported via the web UI and API:
 | `POST` | `/portfolio` | Calculate live P&L (stateless) |
 | `POST` | `/api/fetch-data` | Fetch and store historical data for a symbol |
 | `POST` | `/backtest` | Run a backtest and return results |
+| `GET` | `/api/analyze/:symbol` | Run Python technical analysis (performance, SMAs, RSI, S/R) |
 
 **Supported intervals:** `1m`, `5m`, `15m`, `1h`, `1d`
 **Supported ranges:** `1d`, `1w`, `1m`, `3m`, `1y`
@@ -96,7 +98,9 @@ Three strategy types are supported via the web UI and API:
 
 ```
 psx-engine/
+├── cli.js          # CLI entry point — detects running server, opens browser
 ├── index.js        # Express backend server & API routes
+├── analyze.py      # Python technical analysis engine (SMAs, RSI, S/R)
 ├── backtest.js     # Backtesting engine & strategy system
 ├── scraper.js      # Historical data fetcher
 ├── clean.js        # Data cleaning & normalization
@@ -110,6 +114,7 @@ psx-engine/
 ## Requirements
 
 - Node.js 18 or higher
+- Python 3 with `pandas` and `numpy` (for technical analysis)
 - Internet connection for live data (PSX Terminal API)
 
 ---

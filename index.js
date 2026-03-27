@@ -1,13 +1,14 @@
 import express from 'express';
-import open from 'open';
 import { existsSync, readFileSync } from 'fs';
-import { execFileSync } from 'child_process';
+import { execFileSync, spawnSync, execFile } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import db from './db.js';
 import { run as runBacktest, ensureData, makeMAStrategy, makeCustomStrategy, validateCustomStrategy, makeJsonStrategy, validateJsonStrategy } from './backtest.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+console.log('[PSX] Starting...');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -105,6 +106,7 @@ async function refreshSymbolCache() {
   }
 }
 
+console.log('[PSX] Loading data...');
 refreshSymbolCache();
 setInterval(refreshSymbolCache, SYMBOL_CACHE_TTL_MS);
 
@@ -468,14 +470,69 @@ app.post('/backtest', (req, res) => {
   }
 });
 
+// GET /api/analyze/:symbol — Python-powered analysis engine
+app.get('/api/analyze/:symbol', (req, res) => {
+  const symbol = req.params.symbol.trim().toUpperCase();
+  if (!/^[A-Z0-9]+$/.test(symbol))
+    return res.status(400).json({ error: 'Invalid symbol' });
+
+  const scriptPath = join(__dirname, 'analyze.py');
+  if (!existsSync(scriptPath))
+    return res.status(500).json({ error: 'analyze.py not found' });
+
+  const result = spawnSync('python3', [scriptPath, symbol], {
+    encoding: 'utf8',
+    timeout: 30_000,
+  });
+
+  if (result.error) {
+    console.error('[PSX] analyze.py spawn error:', result.error.message);
+    return res.status(500).json({ error: 'Analysis engine unavailable. Is Python 3 installed?' });
+  }
+
+  if (result.status !== 0) {
+    console.error('[PSX] analyze.py stderr:', result.stderr);
+    return res.status(500).json({ error: 'Analysis engine crashed' });
+  }
+
+  try {
+    const data = JSON.parse(result.stdout);
+    if (data.error) return res.status(400).json(data);
+    res.json(data);
+  } catch {
+    res.status(500).json({ error: 'Invalid response from analysis engine' });
+  }
+});
+
 // Return JSON for any unhandled errors (e.g. body-parser SyntaxError)
 app.use((err, req, res, _next) => {
   console.error('[PSX] Error:', err.message);
   res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
 });
 
-app.listen(PORT, () => {
+console.log('[PSX] Initializing server...');
+
+function openBrowser(url) {
+  if (process.platform === 'win32') {
+    execFile('cmd', ['/c', 'start', url]);
+  } else if (process.platform === 'darwin') {
+    execFile('open', [url]);
+  } else {
+    execFile('xdg-open', [url]);
+  }
+}
+
+const server = app.listen(PORT, () => {
   const url = `http://localhost:${PORT}`;
   console.log(`[PSX] Server running at ${url}`);
-  open(url).catch(() => {});
+  openBrowser(url);
+});
+
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`[PSX] Error: Port ${PORT} is already in use. Stop the existing process or set PORT=<other> and retry.`);
+  } else {
+    console.error('[PSX] Server failed to start:', err.message);
+  }
+  process.exit(1);
 });

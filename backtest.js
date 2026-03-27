@@ -231,67 +231,337 @@ export function makeMAStrategy(fastPeriod = 5, slowPeriod = 20) {
   };
 }
 
-// ── Custom expression strategy ────────────────────────
+// ── Strategy Expression Engine ───────────────────────
+//
+// Supports full expression syntax:
+//   "close > sma(50) AND rsi(14) > 55"
+//   "cross(sma(20), sma(50)) OR rsi(14) < 30"
+//   "crossunder(sma(20), sma(50))"
+//
+// Safe recursive-descent parsing — no dynamic code execution of any kind.
 
-// Supported variables (both sides of a comparison)
-const CANDLE_FIELDS = new Set(['close', 'open', 'high', 'low']);
-const TOKEN_RE      = /^(close|open|high|low|sma\d+|rsi\d+|\d+(\.\d+)?)$/;
-const EXPR_RE       = /^(\S+)\s*(>=|<=|>|<)\s*(\S+)$/;
-const IND_RE        = /\b(sma\d+|rsi\d+)\b/g;
+const VALID_FIELDS = new Set(['open', 'high', 'low', 'close', 'volume', 'change', 'changepercent', 'range']);
+const VALID_FUNCS  = new Set(['sma', 'ema', 'rsi', 'wsma', 'wema']);
+
+// ── Tokenizer ──
 
 /**
- * Parse "close > sma20" → { left:'close', op:'>', right:'sma20' }
- * Throws a descriptive Error on any problem so callers can surface it.
+ * Break an expression string into typed tokens.
+ * Legacy compact forms like "sma20" are transparently expanded to "sma(20)".
  */
-function parseExpression(raw) {
-  const expr = (raw ?? '').trim();
-  if (!expr) throw new Error('Expression is empty');
+function tokenize(expr) {
+  const tokens = [];
+  let i = 0;
+  const s = (expr ?? '').trim();
 
-  const m = expr.match(EXPR_RE);
-  if (!m) throw new Error(`Cannot parse "${expr}" — expected: <value> <op> <value>  (ops: > < >= <=)`);
+  while (i < s.length) {
+    if (/\s/.test(s[i])) { i++; continue; }
 
-  const [, left, op, right] = m;
+    // Comparison operators (check two-char forms first)
+    if (s[i] === '>' && s[i + 1] === '=') { tokens.push({ type: 'op', value: '>=' }); i += 2; continue; }
+    if (s[i] === '<' && s[i + 1] === '=') { tokens.push({ type: 'op', value: '<=' }); i += 2; continue; }
+    if (s[i] === '>')                      { tokens.push({ type: 'op', value: '>' });  i++;     continue; }
+    if (s[i] === '<')                      { tokens.push({ type: 'op', value: '<' });  i++;     continue; }
 
-  for (const token of [left, right]) {
-    if (!TOKEN_RE.test(token))
-      throw new Error(`Unknown variable or value: "${token}" — allowed: close, open, high, low, smaX, rsiX, numbers`);
+    if (s[i] === '(') { tokens.push({ type: 'LPAREN' }); i++; continue; }
+    if (s[i] === ')') { tokens.push({ type: 'RPAREN' }); i++; continue; }
+    if (s[i] === ',') { tokens.push({ type: 'COMMA'  }); i++; continue; }
+
+    // Numeric literals
+    const numM = s.slice(i).match(/^\d+(\.\d+)?/);
+    if (numM) {
+      tokens.push({ type: 'num', value: parseFloat(numM[0]) });
+      i += numM[0].length;
+      continue;
+    }
+
+    // Identifiers: AND, OR, function names, field names
+    const idM = s.slice(i).match(/^[a-zA-Z_][a-zA-Z0-9_]*/);
+    if (idM) {
+      const id    = idM[0];
+      const upper = id.toUpperCase();
+
+      if (upper === 'AND') { tokens.push({ type: 'AND' }); i += id.length; continue; }
+      if (upper === 'OR')  { tokens.push({ type: 'OR'  }); i += id.length; continue; }
+
+      // Backward compat: "sma20" → sma(20), "rsi14" → rsi(14), etc.
+      const legacyM = id.match(/^(sma|ema|rsi|wsma|wema)(\d+)$/i);
+      if (legacyM) {
+        tokens.push({ type: 'ident', value: legacyM[1].toLowerCase() });
+        tokens.push({ type: 'LPAREN' });
+        tokens.push({ type: 'num', value: parseInt(legacyM[2], 10) });
+        tokens.push({ type: 'RPAREN' });
+        i += id.length;
+        continue;
+      }
+
+      tokens.push({ type: 'ident', value: id.toLowerCase() });
+      i += id.length;
+      continue;
+    }
+
+    throw new Error(`Unexpected character "${s[i]}" at position ${i} in: "${expr}"`);
   }
 
-  return { left, op, right };
+  return tokens;
 }
 
-/** Resolve a token to a number given the current candle + history. */
-function resolveToken(token, candle, history) {
-  if (CANDLE_FIELDS.has(token)) return candle[token];
+// ── Recursive-descent parser ──
 
-  // Fast path: pre-computed indicator attached to candle by computeIndicators()
-  if (candle._ind && token in candle._ind) return candle._ind[token];
+class ExprParser {
+  constructor(tokens) { this.tokens = tokens; this.pos = 0; }
 
-  // Fallback: compute SMA on-the-fly from history (used by legacy makeCustomStrategy)
-  const smaMatch = token.match(/^sma(\d+)$/);
-  if (smaMatch) {
-    const period = parseInt(smaMatch[1], 10);
-    const closes = history.filter(c => !c.isSynthetic).map(c => c.close);
-    if (closes.length < period) return NaN;
-    return closes.slice(-period).reduce((s, v) => s + v, 0) / period;
+  peek()    { return this.tokens[this.pos]; }
+  consume() { return this.tokens[this.pos++]; }
+
+  expect(type) {
+    const t = this.consume();
+    if (!t || t.type !== type)
+      throw new Error(`Expected ${type} but got "${t?.type ?? 'EOF'}"`);
+    return t;
   }
 
-  return parseFloat(token); // numeric literal
+  // expression = condition (('AND' | 'OR') condition)*
+  parseExpression() {
+    let left = this.parseCondition();
+    while (this.peek()?.type === 'AND' || this.peek()?.type === 'OR') {
+      const logOp = this.consume().type.toLowerCase(); // 'and' | 'or'
+      const right = this.parseCondition();
+      left = { type: logOp, left, right };
+    }
+    return left;
+  }
+
+  // condition = cross(v, v) | crossunder(v, v) | value op value
+  parseCondition() {
+    const t = this.peek();
+
+    if (t?.type === 'ident' && (t.value === 'cross' || t.value === 'crossunder')) {
+      const name = this.consume().value;
+      this.expect('LPAREN');
+      const a = this.parseValue();
+      this.expect('COMMA');
+      const b = this.parseValue();
+      this.expect('RPAREN');
+      return { type: name, a, b };
+    }
+
+    const left  = this.parseValue();
+    const opTok = this.peek();
+    if (!opTok || opTok.type !== 'op')
+      throw new Error(`Expected comparison operator (> < >= <=) after value, got "${opTok?.type ?? 'EOF'}"`);
+    this.consume();
+    const right = this.parseValue();
+    return { type: 'cmp', left, op: opTok.value, right };
+  }
+
+  // value = number | ident ['(' args ')']
+  parseValue() {
+    const t = this.peek();
+    if (!t) throw new Error('Unexpected end of expression');
+
+    if (t.type === 'num') {
+      this.consume();
+      return { type: 'num', value: t.value };
+    }
+
+    if (t.type === 'LPAREN') {
+      this.consume();
+      const v = this.parseValue();
+      this.expect('RPAREN');
+      return v;
+    }
+
+    if (t.type === 'ident') {
+      this.consume();
+      if (this.peek()?.type === 'LPAREN') {
+        this.consume(); // consume '('
+        const args = [];
+        if (this.peek()?.type !== 'RPAREN') {
+          args.push(this.parseValue());
+          while (this.peek()?.type === 'COMMA') { this.consume(); args.push(this.parseValue()); }
+        }
+        this.expect('RPAREN');
+        return { type: 'func', name: t.value, args };
+      }
+      return { type: 'field', name: t.value };
+    }
+
+    throw new Error(`Unexpected token "${t.type}" while parsing value`);
+  }
 }
 
-/** Evaluate a parsed expression against the current bar. Returns boolean. */
-function evalExpr(parsed, candle, history) {
-  const lv = resolveToken(parsed.left,  candle, history);
-  const rv = resolveToken(parsed.right, candle, history);
-  if (!Number.isFinite(lv) || !Number.isFinite(rv)) return false;
-  switch (parsed.op) {
-    case '>':  return lv >  rv;
-    case '<':  return lv <  rv;
-    case '>=': return lv >= rv;
-    case '<=': return lv <= rv;
+/**
+ * Parse a full strategy expression string into an AST.
+ * Throws a descriptive Error on any syntax problem.
+ */
+function parseStrategy(expr) {
+  const tokens = tokenize(expr);
+  if (tokens.length === 0) throw new Error('Expression is empty');
+  const parser = new ExprParser(tokens);
+  const ast    = parser.parseExpression();
+  if (parser.pos < tokens.length) {
+    const extra = tokens[parser.pos];
+    throw new Error(`Unexpected token "${extra.value ?? extra.type}" after expression`);
   }
-  return false;
+  return ast;
 }
+
+// ── AST validation ──
+
+/** Walk an AST and return an array of semantic error strings. */
+function validateAst(ast) {
+  const errors = [];
+
+  function walkCond(node) {
+    if (!node) { errors.push('Null condition node'); return; }
+    switch (node.type) {
+      case 'and':
+      case 'or':
+        walkCond(node.left);
+        walkCond(node.right);
+        break;
+      case 'cmp':
+        walkVal(node.left);
+        walkVal(node.right);
+        break;
+      case 'cross':
+      case 'crossunder':
+        walkVal(node.a);
+        walkVal(node.b);
+        break;
+      default:
+        errors.push(`Unknown condition node type: "${node.type}"`);
+    }
+  }
+
+  function walkVal(node) {
+    if (!node) { errors.push('Null value node'); return; }
+    switch (node.type) {
+      case 'num': break;
+      case 'field':
+        if (!VALID_FIELDS.has(node.name))
+          errors.push(`Unknown field "${node.name}" — allowed: ${[...VALID_FIELDS].join(', ')}`);
+        break;
+      case 'func': {
+        if (!VALID_FUNCS.has(node.name))
+          errors.push(`Unknown function "${node.name}()" — allowed: ${[...VALID_FUNCS].join(', ')}`);
+        if (node.args.length !== 1)
+          errors.push(`${node.name}() requires exactly 1 argument (period), got ${node.args.length}`);
+        else if (node.args[0].type !== 'num' || !Number.isInteger(node.args[0].value) || node.args[0].value <= 0)
+          errors.push(`${node.name}() argument must be a positive integer`);
+        break;
+      }
+      default:
+        errors.push(`Unknown value node type: "${node.type}"`);
+    }
+  }
+
+  walkCond(ast);
+  return errors;
+}
+
+// ── Indicator key extraction ──
+
+/** Return an array of indicator cache keys (e.g. ["sma_50","rsi_14"]) required by an AST. */
+function extractIndicators(ast) {
+  const keys = new Set();
+
+  function walkCond(node) {
+    if (!node) return;
+    switch (node.type) {
+      case 'and': case 'or': walkCond(node.left); walkCond(node.right); break;
+      case 'cmp': walkVal(node.left); walkVal(node.right); break;
+      case 'cross': case 'crossunder': walkVal(node.a); walkVal(node.b); break;
+    }
+  }
+
+  function walkVal(node) {
+    if (node?.type === 'func') {
+      const period = node.args[0]?.value;
+      if (period > 0) keys.add(`${node.name}_${period}`);
+    }
+  }
+
+  walkCond(ast);
+  return [...keys];
+}
+
+// ── Value resolver ──
+
+/** Resolve a value AST node to a number using the candle's pre-computed _ind cache. */
+function resolveValue(node, candle) {
+  switch (node.type) {
+    case 'num': return node.value;
+    case 'field':
+      switch (node.name) {
+        case 'open':          return candle.open;
+        case 'high':          return candle.high;
+        case 'low':           return candle.low;
+        case 'close':         return candle.close;
+        case 'volume':        return candle.volume;
+        case 'change':        return candle.return ?? NaN;
+        case 'changepercent': return candle.return != null ? candle.return * 100 : NaN;
+        case 'range':         return candle.high - candle.low;
+        default:              return NaN;
+      }
+    case 'func': {
+      const key = `${node.name}_${node.args[0]?.value}`;
+      return (candle._ind && key in candle._ind) ? candle._ind[key] : NaN;
+    }
+    default: return NaN;
+  }
+}
+
+// ── Condition tester ──
+
+/**
+ * Test a strategy AST node against a candle.
+ * Returns true/false. Returns false when any required indicator is unavailable (NaN).
+ */
+function testCondition(ast, candle, history) {
+  switch (ast.type) {
+    case 'and': return testCondition(ast.left, candle, history) && testCondition(ast.right, candle, history);
+    case 'or':  return testCondition(ast.left, candle, history) || testCondition(ast.right, candle, history);
+
+    case 'cmp': {
+      const lv = resolveValue(ast.left,  candle);
+      const rv = resolveValue(ast.right, candle);
+      if (!Number.isFinite(lv) || !Number.isFinite(rv)) return false;
+      switch (ast.op) {
+        case '>':  return lv >  rv;
+        case '<':  return lv <  rv;
+        case '>=': return lv >= rv;
+        case '<=': return lv <= rv;
+      }
+      return false;
+    }
+
+    case 'cross':
+    case 'crossunder': {
+      // Find the most recent real (non-synthetic) candle before the current one
+      let prevCandle = null;
+      for (let j = history.length - 2; j >= 0; j--) {
+        if (!history[j].isSynthetic) { prevCandle = history[j]; break; }
+      }
+      if (!prevCandle) return false;
+
+      const a  = resolveValue(ast.a, candle);
+      const b  = resolveValue(ast.b, candle);
+      const pa = resolveValue(ast.a, prevCandle);
+      const pb = resolveValue(ast.b, prevCandle);
+      if (!Number.isFinite(a) || !Number.isFinite(b) || !Number.isFinite(pa) || !Number.isFinite(pb)) return false;
+
+      return ast.type === 'cross'
+        ? (pa <= pb && a > b)   // crossed above
+        : (pa >= pb && a < b);  // crossed below
+    }
+
+    default: return false;
+  }
+}
+
+// ── Validate / make helpers ──
 
 /**
  * Validate buy/sell expression strings.
@@ -299,24 +569,35 @@ function evalExpr(parsed, candle, history) {
  */
 export function validateCustomStrategy({ buy, sell }) {
   const errors = [];
-  try { parseExpression(buy);  } catch (e) { errors.push(`Buy: ${e.message}`);  }
-  try { parseExpression(sell); } catch (e) { errors.push(`Sell: ${e.message}`); }
+  for (const [label, expr] of [['Buy', buy], ['Sell', sell]]) {
+    try {
+      const ast  = parseStrategy(expr);
+      const errs = validateAst(ast);
+      for (const e of errs) errors.push(`${label}: ${e}`);
+    } catch (e) {
+      errors.push(`${label}: ${e.message}`);
+    }
+  }
   return errors;
 }
 
 /**
  * Build a strategy function from { buy, sell } expression strings.
- * Parses once at creation time; evaluation is pure comparison — no eval().
+ * Supports full AND/OR logic, indicator functions, and cross/crossunder.
  */
 export function makeCustomStrategy({ buy, sell }) {
-  const buyParsed  = parseExpression(buy);
-  const sellParsed = parseExpression(sell);
+  const buyAst  = parseStrategy(buy);
+  const sellAst = parseStrategy(sell);
+  const indicators = [...new Set([...extractIndicators(buyAst), ...extractIndicators(sellAst)])];
 
-  return function customStrategy(candle, history, position) {
-    if (position.shares === 0 && evalExpr(buyParsed,  candle, history)) return 'BUY';
-    if (position.shares >  0  && evalExpr(sellParsed, candle, history)) return 'SELL';
+  function customStrategy(candle, history, position) {
+    if (position.shares === 0 && testCondition(buyAst,  candle, history)) return 'BUY';
+    if (position.shares >  0  && testCondition(sellAst, candle, history)) return 'SELL';
     return 'HOLD';
-  };
+  }
+
+  customStrategy.requiredIndicators = indicators;
+  return customStrategy;
 }
 
 // ── JSON strategy ─────────────────────────────────────
@@ -325,9 +606,9 @@ export function makeCustomStrategy({ buy, sell }) {
  * Validate a JSON strategy object (or JSON string).
  *
  * Format:
- *   { "name": "My Strategy", "buy": ["cond1", "cond2"], "sell": ["cond1"] }
+ *   { "buy": "close > sma(50) AND rsi(14) > 55", "sell": "crossunder(sma(20), sma(50))" }
+ *   { "buy": ["cond1", "cond2"], "sell": ["cond1"] }   ← array: conditions AND-ed
  *
- * buy/sell can also be a single string — it will be treated as a 1-element array.
  * Returns an array of error strings (empty = valid).
  */
 export function validateJsonStrategy(input) {
@@ -348,12 +629,16 @@ export function validateJsonStrategy(input) {
   const buyArr  = toArray(obj.buy);
   const sellArr = toArray(obj.sell);
 
-  if (!buyArr  || buyArr.length  === 0) errors.push('buy must be a non-empty array or string');
-  if (!sellArr || sellArr.length === 0) errors.push('sell must be a non-empty array or string');
+  if (!buyArr  || buyArr.length  === 0) errors.push('buy must be a non-empty string or array');
+  if (!sellArr || sellArr.length === 0) errors.push('sell must be a non-empty string or array');
 
   for (const cond of [...(buyArr ?? []), ...(sellArr ?? [])]) {
-    try { parseExpression(cond); }
-    catch (e) { errors.push(e.message); }
+    try {
+      const errs = validateAst(parseStrategy(cond));
+      for (const e of errs) errors.push(e);
+    } catch (e) {
+      errors.push(e.message);
+    }
   }
 
   return errors;
@@ -361,28 +646,25 @@ export function validateJsonStrategy(input) {
 
 /**
  * Build a strategy function from a JSON strategy object (or JSON string).
- * All buy conditions are AND-ed; all sell conditions are AND-ed.
+ * Array conditions are AND-ed; each string may itself contain AND/OR logic.
  * The returned function has a `.requiredIndicators` property so run() can
  * pre-compute them once for the full dataset before the main loop.
  */
 export function makeJsonStrategy(input) {
-  const obj     = typeof input === 'string' ? JSON.parse(input) : input;
-  const toArray = v => Array.isArray(v) ? v : [v];
-  const buyArr  = toArray(obj.buy);
-  const sellArr = toArray(obj.sell);
-
-  const buyParsed  = buyArr.map(parseExpression);
-  const sellParsed = sellArr.map(parseExpression);
-
-  // Collect all indicator names used across all conditions
-  const allConds = [...buyArr, ...sellArr].join(' ');
-  const indicators = [...new Set([...allConds.matchAll(IND_RE)].map(m => m[1]))];
+  const obj      = typeof input === 'string' ? JSON.parse(input) : input;
+  const toArray  = v => Array.isArray(v) ? v : [v];
+  const buyAsts  = toArray(obj.buy).map(parseStrategy);
+  const sellAsts = toArray(obj.sell).map(parseStrategy);
+  const indicators = [...new Set([
+    ...buyAsts.flatMap(extractIndicators),
+    ...sellAsts.flatMap(extractIndicators),
+  ])];
 
   function jsonStrategy(candle, history, position) {
     if (position.shares === 0) {
-      if (buyParsed.every(p => evalExpr(p, candle, history))) return 'BUY';
+      if (buyAsts.every(ast => testCondition(ast, candle, history))) return 'BUY';
     } else {
-      if (sellParsed.every(p => evalExpr(p, candle, history))) return 'SELL';
+      if (sellAsts.every(ast => testCondition(ast, candle, history))) return 'SELL';
     }
     return 'HOLD';
   }
@@ -426,33 +708,139 @@ function calcRsi(closes, period) {
 }
 
 /**
+ * Compute EMA from a closes array.
+ * Seeded by SMA of the first `period` values, then Wilder-style smoothing.
+ */
+function calcEma(closes, period) {
+  if (closes.length < period) return NaN;
+  const alpha = 2 / (period + 1);
+  let ema = closes.slice(0, period).reduce((s, v) => s + v, 0) / period;
+  for (let i = period; i < closes.length; i++) {
+    ema = closes[i] * alpha + ema * (1 - alpha);
+  }
+  return ema;
+}
+
+/** Return a year-week string key for weekly grouping, e.g. "2024-W03". */
+function isoWeekKey(unixTimestamp) {
+  const d  = new Date(unixTimestamp * 1000);
+  const jan4 = new Date(d.getFullYear(), 0, 4);
+  const startW1 = new Date(jan4);
+  startW1.setDate(jan4.getDate() - ((jan4.getDay() + 6) % 7));
+  const week = Math.floor((d - startW1) / (7 * 86_400_000)) + 1;
+  return `${d.getFullYear()}-W${week}`;
+}
+
+/**
  * Pre-compute a set of indicators for every candle in the array.
- * Results are attached as `candle._ind = { sma20: …, rsi14: … }`.
+ * Results are attached as `candle._ind = { sma_50: …, ema_20: …, rsi_14: … }`.
+ *
+ * Supported key formats:
+ *   sma_N   — simple moving average (daily)
+ *   ema_N   — exponential moving average (daily, incremental)
+ *   rsi_N   — RSI via Wilder's smoothing (daily)
+ *   wsma_N  — simple moving average (weekly)
+ *   wema_N  — exponential moving average (weekly)
+ *
+ * Legacy key formats (sma20, rsi14) are also handled for backward compatibility.
  * Only real (non-synthetic) candles contribute to rolling calculations.
  */
 function computeIndicators(candles, indicators) {
   if (!indicators.length) return;
 
-  const realCloses = []; // grows as we iterate forward
+  const realCloses  = [];
+  const emaStates   = {};  // key → { sum, count, ema, seeded }
+  const weekCloses  = [];  // running weekly closes (last close of each week so far)
+  let   weekKey     = null;
 
   for (const c of candles) {
-    if (!c.isSynthetic) realCloses.push(c.close);
+    if (!c.isSynthetic) {
+      realCloses.push(c.close);
 
-    const ind = {};
-    for (const name of indicators) {
-      const smaM = name.match(/^sma(\d+)$/);
+      // Maintain rolling weekly closes: one entry per calendar week, updated each day
+      const wk = isoWeekKey(c.time);
+      if (wk !== weekKey) {
+        weekCloses.push(c.close);
+        weekKey = wk;
+      } else {
+        weekCloses[weekCloses.length - 1] = c.close;
+      }
+    }
+
+    const ind = c._ind ?? {};
+
+    for (const key of indicators) {
+      // ── sma_N  (new format) ──
+      const smaM = key.match(/^sma_(\d+)$/);
       if (smaM) {
         const p = parseInt(smaM[1], 10);
-        ind[name] = realCloses.length >= p
+        ind[key] = realCloses.length >= p
           ? realCloses.slice(-p).reduce((s, v) => s + v, 0) / p
           : NaN;
         continue;
       }
-      const rsiM = name.match(/^rsi(\d+)$/);
+
+      // ── ema_N  (new format) ──
+      const emaM = key.match(/^ema_(\d+)$/);
+      if (emaM) {
+        const p = parseInt(emaM[1], 10);
+        if (!c.isSynthetic) {
+          let st = emaStates[key] ?? (emaStates[key] = { sum: 0, count: 0, ema: NaN, seeded: false });
+          st.count++;
+          if (!st.seeded) {
+            st.sum += c.close;
+            if (st.count >= p) { st.ema = st.sum / p; st.seeded = true; }
+          } else {
+            const alpha = 2 / (p + 1);
+            st.ema = c.close * alpha + st.ema * (1 - alpha);
+          }
+          ind[key] = st.seeded ? st.ema : NaN;
+        } else {
+          ind[key] = emaStates[key]?.seeded ? emaStates[key].ema : NaN;
+        }
+        continue;
+      }
+
+      // ── rsi_N  (new format) ──
+      const rsiM = key.match(/^rsi_(\d+)$/);
       if (rsiM) {
-        ind[name] = calcRsi(realCloses, parseInt(rsiM[1], 10));
+        ind[key] = calcRsi(realCloses, parseInt(rsiM[1], 10));
+        continue;
+      }
+
+      // ── wsma_N ──
+      const wsmaM = key.match(/^wsma_(\d+)$/);
+      if (wsmaM) {
+        const p = parseInt(wsmaM[1], 10);
+        ind[key] = weekCloses.length >= p
+          ? weekCloses.slice(-p).reduce((s, v) => s + v, 0) / p
+          : NaN;
+        continue;
+      }
+
+      // ── wema_N ──
+      const wemaM = key.match(/^wema_(\d+)$/);
+      if (wemaM) {
+        ind[key] = calcEma(weekCloses, parseInt(wemaM[1], 10));
+        continue;
+      }
+
+      // ── Legacy formats: sma20, rsi14 (backward compat) ──
+      const legSmaM = key.match(/^sma(\d+)$/);
+      if (legSmaM) {
+        const p = parseInt(legSmaM[1], 10);
+        ind[key] = realCloses.length >= p
+          ? realCloses.slice(-p).reduce((s, v) => s + v, 0) / p
+          : NaN;
+        continue;
+      }
+      const legRsiM = key.match(/^rsi(\d+)$/);
+      if (legRsiM) {
+        ind[key] = calcRsi(realCloses, parseInt(legRsiM[1], 10));
+        continue;
       }
     }
+
     c._ind = ind;
   }
 }
