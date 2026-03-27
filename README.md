@@ -1,66 +1,129 @@
-# psx-engine
+# PSX Engine
 
-Open-source PSX trading engine with live market data, portfolio tracking, and backtesting.
+> An open-source trading engine for the Pakistan Stock Exchange — live market data, portfolio tracking, and backtesting in one local web app.
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Node.js](https://img.shields.io/badge/Node.js-18%2B-green.svg)](https://nodejs.org)
+[![npm](https://img.shields.io/npm/v/psx-engine)](https://www.npmjs.com/package/psx-engine)
 
 ---
 
 ## Features
 
-- Live PSX stock data (via API)
-- Portfolio tracking (paper + real)
-- Backtesting engine (multi-year historical data)
-- Strategy system (MA crossover + custom rules)
-- Web-based UI
+- **Live Market Data** — Real-time PSX tick data with candlestick charts across multiple timeframes (1m, 5m, 15m, 1h, 1d)
+- **Portfolio Tracker** — Track paper and real portfolios with live P&L calculations
+- **Backtesting Engine** — Test strategies against multi-year historical OHLC data
+- **Strategy System** — Built-in MA crossover strategy plus support for custom expression-based and JSON-defined strategies
+- **Symbol Search** — Full PSX symbol search with company name resolution
+- **Web UI** — Clean, browser-based interface — no external dependencies required at runtime
 
 ---
 
-## Installation
+## Quick Start
 
-Install globally:
+Install globally via npm:
 
+```bash
 npm install -g psx-engine
+```
 
----
+Then run:
 
-## Usage
-
-Run the app:
-
+```bash
 psx-engine
+```
 
-This will:
-- start the backend server
-- open the web interface automatically
+This starts the backend server and automatically opens the web interface in your browser at `http://localhost:3000`.
 
 ---
 
-## Development
+## Development Setup
 
-Clone the repository:
-
+```bash
 git clone https://github.com/h8ntome/psx-engine.git
 cd psx-engine
-
-Install dependencies:
-
 npm install
-
-Run locally:
-
 npm run dev
+```
+
+---
+
+## Backtesting
+
+Strategies can be run directly from the command line:
+
+```bash
+# MA crossover with defaults (fast=5, slow=20)
+node backtest.js MEBL
+
+# Custom MA periods
+node backtest.js LUCK --fast=10 --slow=50
+
+# Set starting capital and time window
+node backtest.js OGDC --cash=50000 --years=5
+```
+
+Three strategy types are supported via the web UI and API:
+
+| Strategy | Description |
+|----------|-------------|
+| `ma` | Moving average crossover (configurable fast/slow periods) |
+| `custom` | Expression-based buy/sell rules |
+| `json` | JSON-defined strategy object |
+
+---
+
+## API Reference
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/prices?symbols=MEBL,LUCK` | Fetch live prices for up to 10 symbols |
+| `GET` | `/search?query=HBL` | Search symbols with company name |
+| `GET` | `/history/:symbol?interval=1m&range=1d` | OHLC candlestick data |
+| `GET` | `/history-daily/:symbol` | Locally stored daily OHLC data |
+| `GET` | `/portfolio/:type` | Load saved positions (`paper` or `real`) |
+| `POST` | `/portfolio/:type` | Save positions for a portfolio type |
+| `POST` | `/portfolio` | Calculate live P&L (stateless) |
+| `POST` | `/api/fetch-data` | Fetch and store historical data for a symbol |
+| `POST` | `/backtest` | Run a backtest and return results |
+
+**Supported intervals:** `1m`, `5m`, `15m`, `1h`, `1d`
+**Supported ranges:** `1d`, `1w`, `1m`, `3m`, `1y`
 
 ---
 
 ## Project Structure
 
-- index.js → backend server
-- backtest.js → backtesting engine
-- clean.js → data cleaning
-- scraper.js → data fetching
-- index.html → frontend UI
+```
+psx-engine/
+├── index.js        # Express backend server & API routes
+├── backtest.js     # Backtesting engine & strategy system
+├── scraper.js      # Historical data fetcher
+├── clean.js        # Data cleaning & normalization
+├── db.js           # SQLite portfolio persistence
+├── index.html      # Frontend web UI
+└── data/           # Locally cached OHLC data (per symbol)
+```
+
+---
+
+## Requirements
+
+- Node.js 18 or higher
+- Internet connection for live data (PSX Terminal API)
 
 ---
 
 ## Disclaimer
 
-This project is for educational purposes only and is not financial advice.
+This project is for **educational purposes only** and does not constitute financial advice. Past backtest performance does not guarantee future results. Use at your own risk.
+
+---
+
+## Contributing
+
+Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
+
+## License
+
+[MIT](LICENSE)

@@ -6,417 +6,437 @@
   <title>PSX Terminal</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;700&family=Syne:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
   <style>
     :root {
-      --bg:          #07090e;
-      --surface:     #0c1018;
-      --surface-2:   #111720;
-      --border:      #1a2230;
-      --border-2:    #263040;
-      --text:        #d8e4f0;
-      --text-2:      #6a7e94;
-      --text-3:      #30404f;
-      --gold:        #c9a03a;
-      --gold-light:  #e8be58;
-      --gold-glow:   rgba(201,160,58,.12);
-      --green:       #34c96a;
-      --green-glow:  rgba(52,201,106,.1);
-      --red:         #f05a52;
-      --red-glow:    rgba(240,90,82,.1);
+      --bg:        #0C0C10;
+      --panel:     #14141A;
+      --panel2:    #1A1A22;
+      --panel3:    #20202A;
+      --border:    #26262E;
+      --border2:   #32323E;
+      --text:      #F2F2F6;
+      --text2:     #8888A0;
+      --text3:     #44445A;
+      --green:     #00D97E;
+      --green-dim: rgba(0,217,126,.1);
+      --green-glow:rgba(0,217,126,.2);
+      --red:       #FF4D6A;
+      --red-dim:   rgba(255,77,106,.1);
       --mono: 'JetBrains Mono', monospace;
       --sans: 'Syne', sans-serif;
-      --serif: 'Instrument Serif', serif;
-      --r: 7px;
-      --r-sm: 4px;
+      --sidebar-w: 268px;
+      --topbar-h:  52px;
+      --r:    10px;
+      --r-sm: 6px;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
-    html {
-      scrollbar-color: var(--border-2) var(--bg);
-      scrollbar-width: thin;
-    }
+    html { scrollbar-color: var(--border2) var(--bg); scrollbar-width: thin; }
 
     body {
       font-family: var(--sans);
-      background-color: var(--bg);
-      background-image:
-        radial-gradient(ellipse 65% 55% at 12% 45%, rgba(201,160,58,.055) 0%, transparent 55%),
-        radial-gradient(ellipse 55% 65% at 88% 12%, rgba(18,38,68,.35)    0%, transparent 55%),
-        radial-gradient(ellipse 40% 30% at 60% 85%, rgba(52,201,106,.025) 0%, transparent 50%);
+      background: var(--bg);
       color: var(--text);
-      min-height: 100vh;
+      height: 100vh;
+      display: grid;
+      grid-template-rows: var(--topbar-h) 1fr;
+      overflow: hidden;
     }
 
-    /* grain overlay */
-    body::after {
-      content: '';
-      position: fixed;
-      inset: 0;
-      pointer-events: none;
-      z-index: 9999;
-      opacity: .04;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.72' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='260' height='260' filter='url(%23g)'/%3E%3C/svg%3E");
-      background-size: 180px 180px;
-    }
-
-    /* ── Header ─────────────────────────────────────── */
-    header {
+    /* ── Topbar ─────────────────────────────────── */
+    .topbar {
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      padding: 1.4rem 2.5rem;
+      padding: 0 1.4rem;
+      background: var(--panel);
       border-bottom: 1px solid var(--border);
-      position: sticky;
-      top: 0;
-      background: rgba(7,9,14,.85);
-      backdrop-filter: blur(14px);
-      -webkit-backdrop-filter: blur(14px);
+      gap: 1.5rem;
       z-index: 100;
+      animation: slideDown .35s cubic-bezier(.22,1,.36,1) both;
+    }
+
+    @keyframes slideDown {
+      from { opacity: 0; transform: translateY(-8px); }
+      to   { opacity: 1; transform: translateY(0); }
     }
 
     .logo {
       display: flex;
-      align-items: baseline;
-      gap: .6rem;
+      align-items: center;
+      gap: .55rem;
+      flex-shrink: 0;
     }
 
-    .logo-psx {
-      font-family: var(--serif);
-      font-style: italic;
-      font-size: 1.7rem;
-      color: var(--gold);
-      line-height: 1;
-      letter-spacing: -.02em;
-    }
-
-    .logo-word {
+    .logo-mark {
       font-family: var(--sans);
-      font-size: .58rem;
-      font-weight: 700;
-      letter-spacing: .38em;
-      color: var(--text-3);
+      font-size: .8rem;
+      font-weight: 800;
+      color: var(--bg);
+      background: var(--green);
+      padding: .22rem .55rem;
+      border-radius: var(--r-sm);
+      letter-spacing: .06em;
+    }
+
+    .logo-label {
+      font-family: var(--sans);
+      font-size: .72rem;
+      font-weight: 600;
+      color: var(--text2);
+      letter-spacing: .12em;
       text-transform: uppercase;
     }
 
-    .header-right {
+    .section-nav {
+      display: flex;
+      gap: 3px;
+    }
+
+    .nav-btn {
+      font-family: var(--sans);
+      font-size: .72rem;
+      font-weight: 600;
+      letter-spacing: .05em;
+      color: var(--text3);
+      background: transparent;
+      border: 1px solid transparent;
+      padding: .32rem .9rem;
+      border-radius: var(--r-sm);
+      cursor: pointer;
+      transition: color .15s, background .15s, border-color .15s;
+    }
+
+    .nav-btn:hover { color: var(--text2); background: var(--panel2); }
+
+    .nav-btn.active {
+      color: var(--text);
+      background: var(--panel2);
+      border-color: var(--border2);
+    }
+
+    .topbar-right {
+      margin-left: auto;
       display: flex;
       align-items: center;
-      gap: 1.5rem;
+      gap: .9rem;
     }
 
     .live-badge {
       display: flex;
       align-items: center;
       gap: .45rem;
+      font-family: var(--mono);
       font-size: .62rem;
-      font-weight: 700;
-      letter-spacing: .22em;
-      color: var(--text-3);
-      text-transform: uppercase;
+      font-weight: 500;
+      letter-spacing: .08em;
+      color: var(--text2);
+      background: var(--panel2);
+      border: 1px solid var(--border);
+      padding: .28rem .7rem;
+      border-radius: 20px;
     }
 
     .live-dot {
-      width: 6px;
-      height: 6px;
+      width: 6px; height: 6px;
       border-radius: 50%;
       background: var(--green);
-      box-shadow: 0 0 8px var(--green);
-      animation: pulse 2s ease-in-out infinite;
+      box-shadow: 0 0 8px var(--green-glow);
+      animation: pulse 2.2s ease-in-out infinite;
     }
 
     @keyframes pulse {
-      0%, 100% { opacity: 1; box-shadow: 0 0 8px var(--green); }
-      50%       { opacity: .3; box-shadow: none; }
+      0%, 100% { opacity: 1; box-shadow: 0 0 8px var(--green-glow); }
+      50%       { opacity: .35; box-shadow: none; }
     }
 
-    /* ── Main container ─────────────────────────────── */
-    .container {
-      max-width: 880px;
-      margin: 0 auto;
-      padding: 3rem 2.5rem 6rem;
+    /* ── App Shell ─────────────────────────────── */
+    .app-shell {
+      display: grid;
+      grid-template-columns: var(--sidebar-w) 1fr;
+      overflow: hidden;
     }
 
-    /* ── Sections ───────────────────────────────────── */
-    .section + .section {
-      margin-top: 3.5rem;
-      padding-top: 3.5rem;
-      border-top: 1px solid var(--border);
+    /* ── Sidebar ───────────────────────────────── */
+    .sidebar {
+      background: var(--panel);
+      border-right: 1px solid var(--border);
+      overflow-y: auto;
+      padding: 1.2rem 1rem 2rem;
+      animation: slideIn .4s cubic-bezier(.22,1,.36,1) .05s both;
     }
 
-    .section-header {
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateX(-12px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+
+    .sidebar-section { display: none; flex-direction: column; gap: .8rem; }
+    .sidebar-section.active { display: flex; animation: fadeUp .25s ease both; }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .sidebar-label {
+      font-family: var(--mono);
+      font-size: .6rem;
+      font-weight: 500;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+      color: var(--text3);
+    }
+
+    .field-group {
+      display: flex;
+      flex-direction: column;
+      gap: .3rem;
+    }
+
+    /* ── Main Content ──────────────────────────── */
+    .main {
+      overflow-y: auto;
+      padding: 1.5rem 1.75rem 2rem;
+      background: var(--bg);
+      animation: fadeUp .4s cubic-bezier(.22,1,.36,1) .1s both;
+    }
+
+    .main-section { display: none; }
+    .main-section.active { display: block; animation: fadeUp .22s ease both; }
+
+    .main-title {
+      font-family: var(--mono);
+      font-size: .58rem;
+      font-weight: 500;
+      letter-spacing: .2em;
+      text-transform: uppercase;
+      color: var(--text3);
+      margin-bottom: 1.1rem;
       display: flex;
       align-items: center;
       gap: .9rem;
-      margin-bottom: 1.75rem;
     }
 
-    .section-num {
-      font-family: var(--mono);
-      font-size: .6rem;
-      font-weight: 700;
-      color: var(--text-3);
-      background: var(--surface-2);
-      border: 1px solid var(--border);
-      padding: .25rem .55rem;
-      border-radius: 3px;
-      letter-spacing: .1em;
+    .main-title::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
     }
 
-    .section-title {
-      font-size: 1rem;
-      font-weight: 700;
-      color: var(--text);
-      letter-spacing: -.01em;
-    }
-
-    /* ── Inputs ─────────────────────────────────────── */
+    /* ── Inputs ────────────────────────────────── */
     input[type="text"],
-    input[type="number"] {
-      background: var(--surface);
-      border: 1px solid var(--border-2);
+    input[type="number"],
+    select {
+      background: var(--panel2);
+      border: 1px solid var(--border);
       color: var(--text);
       font-family: var(--mono);
-      font-size: .83rem;
-      padding: .6rem .9rem;
+      font-size: .8rem;
+      font-weight: 400;
+      padding: .55rem .85rem;
       border-radius: var(--r-sm);
       outline: none;
-      transition: border-color .18s, box-shadow .18s;
+      width: 100%;
+      transition: border-color .15s, box-shadow .15s;
     }
 
     input[type="text"]:focus,
-    input[type="number"]:focus {
-      border-color: var(--gold);
-      box-shadow: 0 0 0 3px var(--gold-glow);
+    input[type="number"]:focus,
+    select:focus {
+      border-color: var(--green);
+      box-shadow: 0 0 0 3px var(--green-dim);
     }
 
-    input::placeholder { color: var(--text-3); }
+    input::placeholder { color: var(--text3); }
+    select { cursor: pointer; appearance: none; }
 
-    /* ── Buttons ─────────────────────────────────────── */
-    button.btn-primary {
-      background: var(--gold);
-      color: #07050a;
+    /* ── Buttons ───────────────────────────────── */
+    .btn-primary {
+      background: var(--green);
+      color: #0C0C10;
       font-family: var(--sans);
       font-size: .72rem;
       font-weight: 700;
-      letter-spacing: .1em;
-      text-transform: uppercase;
-      padding: .6rem 1.3rem;
+      letter-spacing: .05em;
+      padding: .58rem 1.1rem;
       border: none;
       border-radius: var(--r-sm);
       cursor: pointer;
       white-space: nowrap;
-      transition: filter .15s, transform .1s, box-shadow .15s;
+      transition: filter .15s, box-shadow .15s, transform .1s;
     }
 
-    button.btn-primary:hover {
-      filter: brightness(1.12);
-      box-shadow: 0 0 18px rgba(201,160,58,.3);
+    .btn-primary:hover {
+      filter: brightness(1.1);
+      box-shadow: 0 4px 20px var(--green-glow);
     }
 
-    button.btn-primary:active { transform: scale(.97); }
+    .btn-primary:active { transform: scale(.97); }
 
-    button.btn-primary:disabled {
-      background: var(--surface-2);
-      color: var(--text-3);
+    .btn-primary:disabled {
+      background: var(--panel3);
+      color: var(--text3);
       cursor: not-allowed;
       filter: none;
       box-shadow: none;
     }
 
-    button.btn-remove {
+    .btn-run { width: 100%; padding: .62rem; }
+
+    .btn-remove {
       background: transparent;
       border: 1px solid transparent;
-      color: var(--text-3);
+      color: var(--text3);
       font-family: var(--sans);
-      font-size: .68rem;
+      font-size: .66rem;
       font-weight: 600;
-      letter-spacing: .06em;
-      padding: .22rem .55rem;
-      border-radius: 4px;
+      padding: .2rem .5rem;
+      border-radius: var(--r-sm);
       cursor: pointer;
       transition: all .15s;
       white-space: nowrap;
     }
 
-    button.btn-remove:hover {
-      background: var(--red-glow);
+    .btn-remove:hover {
+      background: var(--red-dim);
       border-color: var(--red);
       color: var(--red);
     }
 
-    /* ── Tabs ────────────────────────────────────────── */
+    /* ── Tabs ──────────────────────────────────── */
     .tabs {
       display: flex;
-      background: var(--surface);
+      background: var(--panel2);
       border: 1px solid var(--border);
       border-radius: var(--r-sm);
       padding: 3px;
-      width: fit-content;
-      margin-bottom: 1.75rem;
       gap: 2px;
     }
 
     .tab {
-      padding: .38rem 1.1rem;
+      flex: 1;
+      padding: .3rem .75rem;
       font-family: var(--sans);
-      font-size: .7rem;
-      font-weight: 700;
-      letter-spacing: .1em;
-      text-transform: uppercase;
-      color: var(--text-2);
+      font-size: .68rem;
+      font-weight: 600;
+      letter-spacing: .06em;
+      color: var(--text3);
       background: transparent;
       border: none;
-      border-radius: 3px;
+      border-radius: 4px;
       cursor: pointer;
-      transition: color .15s, background .15s, box-shadow .15s;
+      transition: color .15s, background .15s;
     }
 
-    .tab:hover { color: var(--text); }
+    .tab:hover { color: var(--text2); }
+    .tab.active { background: var(--panel3); color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,.5); }
 
-    .tab.active {
-      background: var(--surface-2);
-      color: var(--gold);
-      box-shadow: 0 1px 4px rgba(0,0,0,.5);
-    }
-
-    /* ── Sub-labels ─────────────────────────────────── */
-    .sub-label {
-      font-family: var(--sans);
-      font-size: .58rem;
-      font-weight: 700;
-      letter-spacing: .28em;
-      text-transform: uppercase;
-      color: var(--text-3);
-      margin-bottom: .65rem;
-    }
-
-    .sub-label.mt { margin-top: 1.5rem; }
-
-    /* ── Symbol search dropdown ─────────────────────── */
-    .search-wrap {
-      position: relative;
-      width: 180px;
-    }
-
-    .search-wrap--wide {
-      width: 340px;
-      max-width: 100%;
-    }
+    /* ── Symbol dropdown ───────────────────────── */
+    .search-wrap { position: relative; }
 
     .search-hint {
       font-family: var(--mono);
-      font-size: .65rem;
-      color: var(--text-3);
-      margin-top: .5rem;
-      margin-bottom: .75rem;
-    }
-
-    .search-wrap input[type="text"] {
-      width: 100%;
+      font-size: .6rem;
+      color: var(--text3);
+      margin-top: .3rem;
     }
 
     .sym-dropdown {
       position: absolute;
-      top: calc(100% + 4px);
+      top: calc(100% + 5px);
       left: 0;
-      min-width: 260px;
-      background: var(--surface-2);
-      border: 1px solid var(--border-2);
+      min-width: 240px;
+      background: var(--panel2);
+      border: 1px solid var(--border2);
       border-radius: var(--r);
-      box-shadow: 0 8px 24px rgba(0,0,0,.5);
-      z-index: 50;
+      box-shadow: 0 12px 40px rgba(0,0,0,.7);
+      z-index: 200;
       overflow: hidden;
     }
 
     .sym-item {
       display: flex;
       align-items: baseline;
-      gap: .6rem;
-      padding: .5rem .875rem;
+      gap: .65rem;
+      padding: .5rem .9rem;
       cursor: pointer;
       transition: background .1s;
     }
 
-    .sym-item:not(:last-child) {
-      border-bottom: 1px solid var(--border);
-    }
-
-    .sym-item:hover,
-    .sym-item.hi {
-      background: var(--gold-glow);
-    }
+    .sym-item:not(:last-child) { border-bottom: 1px solid var(--border); }
+    .sym-item:hover, .sym-item.hi { background: var(--green-dim); }
 
     .sym-ticker {
       font-family: var(--mono);
-      font-size: .8rem;
-      font-weight: 700;
-      color: var(--gold-light);
-      letter-spacing: .04em;
+      font-size: .78rem;
+      font-weight: 600;
+      color: var(--green);
+      letter-spacing: .03em;
       white-space: nowrap;
       flex-shrink: 0;
     }
 
     .sym-name {
       font-family: var(--sans);
-      font-size: .72rem;
-      color: var(--text-2);
+      font-size: .68rem;
+      color: var(--text2);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
 
     .sym-empty {
-      padding: .6rem .875rem;
-      font-family: var(--sans);
-      font-size: .75rem;
-      color: var(--text-3);
+      padding: .6rem .9rem;
+      font-family: var(--mono);
+      font-size: .7rem;
+      color: var(--text3);
     }
 
-    /* ── Add-position form ──────────────────────────── */
-    .pos-form {
-      display: flex;
-      gap: .5rem;
-      flex-wrap: wrap;
-      align-items: center;
-      margin-bottom: .5rem;
-    }
-
-    .pos-form input[type="number"] { width: 108px; }
-
-    /* ── Messages ───────────────────────────────────── */
+    /* ── Messages ──────────────────────────────── */
     .message {
       font-family: var(--mono);
-      font-size: .76rem;
+      font-size: .68rem;
       color: var(--red);
-      min-height: 1.15rem;
-      margin: .35rem 0 .6rem;
+      min-height: 1rem;
+      line-height: 1.5;
     }
 
-    /* ── Table wrapper ──────────────────────────────── */
+    .message.info { color: var(--text2); }
+
+    /* ── Divider ───────────────────────────────── */
+    .divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: .1rem 0;
+    }
+
+    /* ── Pos form ──────────────────────────────── */
+    .pos-row { display: flex; gap: .5rem; }
+    .pos-row input { flex: 1; min-width: 0; }
+
+    /* ── Table wrapper ─────────────────────────── */
     .table-wrap {
       border: 1px solid var(--border);
       border-radius: var(--r);
       overflow: hidden;
+      margin-bottom: 1.1rem;
     }
 
-    /* ── Tables ─────────────────────────────────────── */
-    table {
-      width: 100%;
-      border-collapse: collapse;
-    }
+    table { width: 100%; border-collapse: collapse; }
 
     th {
-      font-family: var(--sans);
-      font-size: .57rem;
-      font-weight: 700;
-      letter-spacing: .24em;
+      font-family: var(--mono);
+      font-size: .58rem;
+      font-weight: 500;
+      letter-spacing: .18em;
       text-transform: uppercase;
-      color: var(--text-3);
-      padding: .58rem 1rem;
-      background: var(--surface);
+      color: var(--text3);
+      padding: .55rem 1rem;
+      background: var(--panel);
       border-bottom: 1px solid var(--border);
       text-align: left;
       white-space: nowrap;
@@ -424,101 +444,139 @@
 
     td {
       font-family: var(--mono);
-      font-size: .84rem;
-      padding: .68rem 1rem;
+      font-size: .82rem;
+      font-weight: 400;
+      padding: .62rem 1rem;
       border-bottom: 1px solid var(--border);
       color: var(--text);
       font-variant-numeric: tabular-nums;
-      transition: background .12s;
     }
 
     tr:last-child td { border-bottom: none; }
+    tbody tr:hover td { background: rgba(255,255,255,.025); }
 
-    tbody tr:hover td {
-      background: rgba(255,255,255,.018);
-    }
-
-    td.sym {
-      font-weight: 700;
-      color: var(--gold-light);
-      letter-spacing: .04em;
-    }
-
+    td.sym { font-weight: 600; color: var(--green); letter-spacing: .04em; }
     .positive { color: var(--green); font-weight: 500; }
     .negative { color: var(--red);   font-weight: 500; }
 
-    /* ── Meta line ──────────────────────────────────── */
+    /* ── Price flash ───────────────────────────── */
+    @keyframes rowFlash {
+      0%   { background: rgba(0,217,126,.12); }
+      100% { background: transparent; }
+    }
+    .flash td { animation: rowFlash .7s ease forwards; }
+
+    /* ── Meta ──────────────────────────────────── */
     .meta {
       font-family: var(--mono);
-      font-size: .67rem;
-      color: var(--text-3);
-      margin-top: .8rem;
+      font-size: .62rem;
+      color: var(--text3);
+      margin-top: .5rem;
+      margin-bottom: 1.1rem;
     }
 
-    /* ── Totals ─────────────────────────────────────── */
-    /* ── Portfolio summary bar ──────────────────────── */
+    /* ── Stat cards ────────────────────────────── */
     .port-summary {
-      display: flex;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
       gap: 1px;
       background: var(--border);
       border: 1px solid var(--border);
       border-radius: var(--r);
       overflow: hidden;
-      margin-bottom: 1.5rem;
+      margin-bottom: 1.1rem;
     }
 
     .port-stat {
-      flex: 1;
       display: flex;
       flex-direction: column;
       gap: .3rem;
       padding: .9rem 1.1rem;
-      background: var(--surface);
+      background: var(--panel);
+      transition: background .15s;
     }
 
+    .port-stat:hover { background: var(--panel2); }
+
     .port-stat-label {
-      font-family: var(--sans);
-      font-size: .57rem;
-      font-weight: 700;
-      letter-spacing: .22em;
+      font-family: var(--mono);
+      font-size: .56rem;
+      font-weight: 500;
+      letter-spacing: .18em;
       text-transform: uppercase;
-      color: var(--text-3);
+      color: var(--text3);
     }
 
     .port-stat-value {
       font-family: var(--mono);
-      font-size: 1.05rem;
-      font-weight: 700;
+      font-size: 1rem;
+      font-weight: 600;
       color: var(--text);
       font-variant-numeric: tabular-nums;
     }
 
-    /* ── Auto-refresh badge ──────────────────────────── */
+    .bt-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      overflow: hidden;
+      margin-bottom: 1.1rem;
+    }
+
+    .bt-stat {
+      display: flex;
+      flex-direction: column;
+      gap: .3rem;
+      padding: .9rem 1.1rem;
+      background: var(--panel);
+      transition: background .15s;
+    }
+
+    .bt-stat:hover { background: var(--panel2); }
+
+    .bt-stat-label {
+      font-family: var(--mono);
+      font-size: .56rem;
+      font-weight: 500;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+      color: var(--text3);
+    }
+
+    .bt-stat-value {
+      font-family: var(--mono);
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ── Auto badge ────────────────────────────── */
     .auto-badge {
       display: inline-flex;
       align-items: center;
-      gap: .35rem;
-      font-family: var(--sans);
-      font-size: .6rem;
-      font-weight: 700;
-      letter-spacing: .15em;
-      text-transform: uppercase;
+      gap: .4rem;
+      font-family: var(--mono);
+      font-size: .58rem;
+      font-weight: 500;
+      letter-spacing: .1em;
       color: var(--green);
-      margin-left: .25rem;
     }
 
-    /* ── Chart controls ──────────────────────────── */
+    /* ── Chart controls ────────────────────────── */
     .chart-controls {
       display: flex;
-      gap: 1.25rem;
+      gap: .75rem;
       align-items: center;
-      margin-bottom: 1.25rem;
-      flex-wrap: wrap;
+      margin-bottom: 1rem;
     }
 
     .ctrl-group {
       display: flex;
-      background: var(--surface);
+      background: var(--panel);
       border: 1px solid var(--border);
       border-radius: var(--r-sm);
       padding: 2px;
@@ -526,160 +584,269 @@
     }
 
     .ctrl-btn {
-      padding: .28rem .72rem;
+      padding: .25rem .65rem;
       font-family: var(--mono);
-      font-size: .68rem;
-      font-weight: 700;
-      letter-spacing: .05em;
-      color: var(--text-2);
+      font-size: .65rem;
+      font-weight: 500;
+      color: var(--text3);
       background: transparent;
       border: none;
-      border-radius: 3px;
+      border-radius: 4px;
       cursor: pointer;
       transition: color .15s, background .15s;
     }
 
-    .ctrl-btn:hover { color: var(--text); }
+    .ctrl-btn:hover { color: var(--text2); }
+    .ctrl-btn.active { background: var(--panel2); color: var(--green); }
 
-    .ctrl-btn.active {
-      background: var(--surface-2);
-      color: var(--gold);
-      box-shadow: 0 1px 4px rgba(0,0,0,.5);
-    }
-
+    /* ── Chart box ─────────────────────────────── */
     .chart-box {
       position: relative;
-      height: 280px;
-      background: var(--surface);
+      height: 250px;
+      background: var(--panel);
       border: 1px solid var(--border);
       border-radius: var(--r);
       overflow: hidden;
-      padding: 1rem 1rem 1rem .5rem;
+      padding: .9rem .9rem .9rem .35rem;
+    }
+
+    .chart-info-line {
+      position: absolute;
+      top: .55rem;
+      left: .85rem;
+      font-family: var(--mono);
+      font-size: .62rem;
+      color: var(--text2);
+      pointer-events: none;
+      z-index: 10;
     }
 
     .chart-status {
       font-family: var(--mono);
-      font-size: .78rem;
-      color: var(--text-3);
+      font-size: .72rem;
+      color: var(--text3);
       text-align: center;
-      padding: 4rem 0;
+      padding: 3rem 0;
     }
 
-    /* ── Backtest form ───────────────────────────── */
-    .bt-form {
-      display: flex;
-      gap: .5rem;
-      flex-wrap: wrap;
-      align-items: center;
-      margin-bottom: .5rem;
-    }
+    /* ── Backtest ──────────────────────────────── */
+    .bt-row { display: flex; gap: .5rem; }
+    .bt-row input { flex: 1; min-width: 0; }
 
-    .bt-form select {
-      background: var(--surface);
-      border: 1px solid var(--border-2);
-      color: var(--text);
-      font-family: var(--mono);
-      font-size: .83rem;
-      padding: .6rem .9rem;
-      border-radius: var(--r-sm);
-      outline: none;
-      cursor: pointer;
-    }
-
-    .bt-form input[type="number"] { width: 108px; }
-
-    .bt-expr-row {
-      display: flex;
-      gap: .75rem;
-      margin-top: .65rem;
-      flex-wrap: wrap;
-    }
-
-    .bt-expr-row > div { flex: 1; min-width: 220px; }
-    .bt-expr-row input[type="text"] { width: 100%; }
+    .bt-expr-col { display: flex; flex-direction: column; gap: .55rem; }
 
     .bt-syntax-hint {
       font-family: var(--mono);
-      font-size: .63rem;
-      color: var(--text-3);
-      margin-top: .35rem;
-    }
-
-    /* ── Backtest results ────────────────────────── */
-    .bt-results { margin-top: 1.5rem; }
-
-    .bt-stats {
-      display: flex;
-      gap: 1px;
-      background: var(--border);
-      border: 1px solid var(--border);
-      border-radius: var(--r);
-      overflow: hidden;
-      margin-bottom: 1.5rem;
-    }
-
-    .bt-stat {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      gap: .3rem;
-      padding: .9rem 1.1rem;
-      background: var(--surface);
-    }
-
-    .bt-stat-label {
-      font-family: var(--sans);
-      font-size: .57rem;
-      font-weight: 700;
-      letter-spacing: .22em;
-      text-transform: uppercase;
-      color: var(--text-3);
-    }
-
-    .bt-stat-value {
-      font-family: var(--mono);
-      font-size: 1.05rem;
-      font-weight: 700;
-      color: var(--text);
-      font-variant-numeric: tabular-nums;
+      font-size: .58rem;
+      color: var(--text3);
+      line-height: 1.65;
     }
 
     .bt-equity-box {
-      height: 180px;
-      background: var(--surface);
+      height: 190px;
+      background: var(--panel);
       border: 1px solid var(--border);
       border-radius: var(--r);
       overflow: hidden;
-      padding: .75rem .75rem .75rem .25rem;
-      margin-bottom: 1.5rem;
+      padding: .75rem .75rem .75rem .3rem;
+      margin-bottom: 1.1rem;
     }
 
     .bt-table-wrap {
       border: 1px solid var(--border);
       border-radius: var(--r);
       overflow: hidden;
-      max-height: 320px;
+      max-height: 300px;
       overflow-y: auto;
     }
 
-    /* fade-in for newly shown elements */
-    @keyframes fadeUp {
-      from { opacity: 0; transform: translateY(6px); }
-      to   { opacity: 1; transform: translateY(0); }
+    .sub-label {
+      font-family: var(--mono);
+      font-size: .56rem;
+      font-weight: 500;
+      letter-spacing: .2em;
+      text-transform: uppercase;
+      color: var(--text3);
+      margin-bottom: .55rem;
     }
 
-    .fade-in { animation: fadeUp .25s ease forwards; }
+    .sub-label.mt { margin-top: 1.1rem; }
+
+    /* ── JSON dropzone ─────────────────────────── */
+    .bt-dropzone {
+      border: 1px dashed var(--border2);
+      border-radius: var(--r);
+      padding: 1.4rem .75rem;
+      text-align: center;
+      cursor: pointer;
+      position: relative;
+      transition: border-color .18s, background .18s;
+    }
+
+    .bt-dropzone:hover, .bt-dropzone.drag-over {
+      border-color: var(--green);
+      background: var(--green-dim);
+    }
+
+    .bt-dropzone input[type="file"] {
+      position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+    }
+
+    .bt-drop-icon { font-size: 1.3rem; color: var(--text3); margin-bottom: .3rem; }
+    .bt-drop-text { font-family: var(--sans); font-size: .72rem; font-weight: 600; color: var(--text2); }
+    .bt-drop-hint { font-family: var(--mono); font-size: .6rem; color: var(--text3); margin-top: .18rem; }
+
+    .bt-file-loaded {
+      display: flex;
+      align-items: center;
+      gap: .55rem;
+      padding: .44rem .75rem;
+      background: var(--panel2);
+      border: 1px solid var(--border);
+      border-radius: var(--r-sm);
+      font-family: var(--mono);
+      font-size: .7rem;
+      color: var(--text2);
+    }
+
+    .bt-file-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--green); box-shadow: 0 0 6px var(--green-glow); flex-shrink: 0;
+    }
+
+    .bt-file-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    .bt-file-clear {
+      background: none; border: none; color: var(--text3);
+      cursor: pointer; font-size: .8rem; padding: 0 .1rem; transition: color .15s;
+    }
+    .bt-file-clear:hover { color: var(--red); }
+
+    /* ── Info panel ────────────────────────────── */
+    .bt-info-panel {
+      background: var(--panel2);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      overflow: hidden;
+    }
+
+    .bt-info-header {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      padding: .55rem .85rem;
+      cursor: pointer;
+      user-select: none;
+      transition: background .15s;
+    }
+
+    .bt-info-header:hover { background: var(--panel3); }
+
+    .bt-info-tag {
+      font-family: var(--mono);
+      font-size: .54rem;
+      font-weight: 600;
+      letter-spacing: .08em;
+      padding: .13rem .42rem;
+      background: var(--green-dim);
+      border: 1px solid rgba(0,217,126,.2);
+      border-radius: 4px;
+      color: var(--green);
+    }
+
+    .bt-info-title {
+      font-family: var(--sans);
+      font-size: .65rem;
+      font-weight: 600;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: var(--text3);
+      transition: color .15s;
+    }
+
+    .bt-info-header:hover .bt-info-title { color: var(--text2); }
+
+    .bt-info-chevron {
+      margin-left: auto;
+      font-size: .62rem;
+      color: var(--text3);
+      transition: transform .2s;
+    }
+
+    .bt-info-body { display: grid; grid-template-rows: 1fr; transition: grid-template-rows .22s ease; }
+    .bt-info-body.collapsed { grid-template-rows: 0fr; }
+    .bt-info-inner { overflow: hidden; }
+
+    .bt-info-content {
+      padding: .8rem .85rem 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: .75rem;
+    }
+
+    .bt-info-code {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--r-sm);
+      padding: .75rem .9rem;
+      font-family: var(--mono);
+      font-size: .66rem;
+      line-height: 1.8;
+      color: var(--text2);
+      white-space: pre;
+      overflow-x: auto;
+    }
+
+    .ic-key  { color: var(--green); }
+    .ic-str  { color: #FFB347; }
+    .ic-punc { color: var(--text3); }
+
+    .bt-info-rule { font-family: var(--sans); font-size: .68rem; color: var(--text2); line-height: 1.6; }
+    .bt-info-rule strong { color: var(--text); font-weight: 700; }
+
+    .bt-info-chips { display: flex; flex-wrap: wrap; gap: .28rem; margin-top: .35rem; }
+
+    .bt-chip {
+      font-family: var(--mono);
+      font-size: .6rem;
+      padding: .13rem .44rem;
+      background: var(--panel3);
+      border: 1px solid var(--border2);
+      border-radius: 4px;
+      color: var(--text2);
+    }
+
+    .bt-info-sub {
+      font-family: var(--sans);
+      font-size: .58rem;
+      font-weight: 700;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--text3);
+      margin-top: .65rem;
+      margin-bottom: .28rem;
+    }
+
+    /* ── Scrollbar ─────────────────────────────── */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text3); }
   </style>
 </head>
 <body>
 
-  <!-- ── Header ──────────────────────────────────────── -->
-  <header>
+  <header class="topbar">
     <div class="logo">
-      <span class="logo-psx">PSX</span>
-      <span class="logo-word">Terminal</span>
+      <span class="logo-mark">PSX</span>
+      <span class="logo-label">Terminal</span>
     </div>
-    <div class="header-right">
+    <nav class="section-nav">
+      <button class="nav-btn active" data-section="market">Market</button>
+      <button class="nav-btn"        data-section="portfolio">Portfolio</button>
+      <button class="nav-btn"        data-section="backtest">Backtest</button>
+    </nav>
+    <div class="topbar-right">
       <div class="live-badge">
         <span class="live-dot"></span>
         Live
@@ -687,223 +854,286 @@
     </div>
   </header>
 
-  <main class="container">
+  <div class="app-shell">
 
-    <!-- ── Price Lookup ────────────────────────────── -->
-    <section class="section">
-      <div class="section-header">
-        <span class="section-num">01</span>
-        <span class="section-title">Price Lookup</span>
-      </div>
+    <aside class="sidebar">
 
-      <div class="search-wrap search-wrap--wide">
-        <input id="symbolsInput" type="text" placeholder="Search a stock…" autocomplete="off">
-        <div id="priceDropdown" class="sym-dropdown" style="display:none"></div>
-      </div>
-      <p class="search-hint">Press Enter to fetch · separate multiple with commas</p>
-
-      <div id="priceMessage" class="message"></div>
-
-      <div id="priceTableWrap" class="table-wrap" style="display:none">
-        <table id="resultsTable">
-          <thead>
-            <tr>
-              <th>Symbol</th>
-              <th>Price</th>
-              <th>Change</th>
-              <th>Time</th>
-            </tr>
-          </thead>
-          <tbody id="tableBody"></tbody>
-        </table>
-      </div>
-
-      <div id="priceMeta" class="meta"></div>
-    </section>
-
-    <!-- ── Chart ────────────────────────────────────── -->
-    <section class="section" id="chartSection" style="display:none">
-      <div class="section-header">
-        <span class="section-num">02</span>
-        <span class="section-title" id="chartTitle">Chart</span>
-      </div>
-
-      <div class="chart-controls">
-        <div class="ctrl-group" id="intervalGroup">
-          <button class="ctrl-btn active" onclick="setChartInterval('1m')">1m</button>
-          <button class="ctrl-btn"        onclick="setChartInterval('5m')">5m</button>
-          <button class="ctrl-btn"        onclick="setChartInterval('15m')">15m</button>
-        </div>
-      </div>
-
-      <div id="chartStatus" class="chart-status"></div>
-      <div class="chart-box" id="chartBox" style="display:none">
-        <canvas id="priceChart"></canvas>
-      </div>
-    </section>
-
-    <!-- ── Portfolio ───────────────────────────────── -->
-    <section class="section">
-      <div class="section-header">
-        <span class="section-num">03</span>
-        <span class="section-title">Portfolio</span>
-        <span class="auto-badge" id="autoBadge" style="display:none">
-          <span class="live-dot"></span> Live
-        </span>
-      </div>
-
-      <div class="tabs">
-        <button class="tab active" id="tabPaper" onclick="switchMode('paper')">Paper</button>
-        <button class="tab"        id="tabReal"  onclick="switchMode('real')">Real</button>
-      </div>
-
-      <div class="sub-label">Add Position</div>
-      <div class="pos-form">
-        <div class="search-wrap">
-          <input id="posSymbol" type="text" placeholder="Search symbol…" autocomplete="off">
-          <div id="symDropdown" class="sym-dropdown" style="display:none"></div>
-        </div>
-        <input id="posQty"      type="number" placeholder="Quantity"  min="0.0001" step="any">
-        <input id="posBuyPrice" type="number" placeholder="Buy Price" min="0.0001" step="any">
-        <button class="btn-primary" onclick="addPosition()">Add</button>
-      </div>
-      <div id="posMessage" class="message"></div>
-      <div id="portfolioMessage" class="message"></div>
-
-      <div id="portfolioWrap" style="display:none">
-        <div class="port-summary">
-          <div class="port-stat">
-            <span class="port-stat-label">Total Value</span>
-            <span class="port-stat-value" id="totalValue">—</span>
+      <div class="sidebar-section active" id="sideMarket">
+        <div class="field-group">
+          <div class="sidebar-label">Symbol Search</div>
+          <div class="search-wrap">
+            <input id="symbolsInput" type="text" placeholder="Search stock…" autocomplete="off">
+            <div id="priceDropdown" class="sym-dropdown" style="display:none"></div>
           </div>
-          <div class="port-stat">
-            <span class="port-stat-label">Invested</span>
-            <span class="port-stat-value" id="totalInvested">—</span>
+          <p class="search-hint">Enter to fetch · comma-separated</p>
+        </div>
+        <div id="priceMessage" class="message"></div>
+      </div>
+
+      <div class="sidebar-section" id="sidePortfolio">
+        <div class="tabs">
+          <button class="tab active" id="tabPaper" onclick="switchMode('paper')">Paper</button>
+          <button class="tab"        id="tabReal"  onclick="switchMode('real')">Real</button>
+        </div>
+        <hr class="divider">
+        <div class="field-group">
+          <div class="sidebar-label">Add Position</div>
+          <div class="search-wrap">
+            <input id="posSymbol" type="text" placeholder="Search symbol…" autocomplete="off">
+            <div id="symDropdown" class="sym-dropdown" style="display:none"></div>
           </div>
-          <div class="port-stat">
-            <span class="port-stat-label">Profit / Loss</span>
-            <span class="port-stat-value" id="totalProfit">—</span>
+        </div>
+        <div class="pos-row">
+          <input id="posQty"      type="number" placeholder="Quantity"  min="0.0001" step="any">
+          <input id="posBuyPrice" type="number" placeholder="Buy Price" min="0.0001" step="any">
+        </div>
+        <button class="btn-primary" onclick="addPosition()" style="width:100%">Add Position</button>
+        <div id="posMessage" class="message"></div>
+      </div>
+
+      <div class="sidebar-section" id="sideBacktest">
+        <div class="field-group">
+          <div class="sidebar-label">Symbol</div>
+          <div class="search-wrap">
+            <input id="btSymbol" type="text" placeholder="Symbol…" autocomplete="off">
+            <div id="btDropdown" class="sym-dropdown" style="display:none"></div>
           </div>
         </div>
 
-        <div class="table-wrap">
-          <table id="portfolioTable">
+        <div class="field-group">
+          <div class="sidebar-label">Strategy</div>
+          <select id="btStrategy" onchange="onBtStrategyChange()">
+            <option value="ma">MA Crossover</option>
+            <option value="custom">Custom</option>
+            <option value="json">JSON File</option>
+          </select>
+        </div>
+
+        <div id="btMAControls">
+          <div class="bt-row">
+            <input id="btFast" type="number" placeholder="Fast MA" value="5"  min="1" step="1">
+            <input id="btSlow" type="number" placeholder="Slow MA" value="20" min="2" step="1">
+          </div>
+        </div>
+
+        <div id="btCustomControls" style="display:none">
+          <div class="bt-expr-col">
+            <div class="field-group">
+              <div class="sidebar-label">Buy when</div>
+              <input id="btBuyExpr"  type="text" placeholder="close > sma20" autocomplete="off">
+            </div>
+            <div class="field-group">
+              <div class="sidebar-label">Sell when</div>
+              <input id="btSellExpr" type="text" placeholder="close < sma20" autocomplete="off">
+            </div>
+            <p class="bt-syntax-hint">close · open · high · low · smaX · rsiX<br>&gt; &lt; &gt;= &lt;=</p>
+          </div>
+        </div>
+
+        <div id="btJsonControls" style="display:none">
+          <div class="bt-dropzone" id="btDropZone">
+            <input type="file" id="btFileInput" accept=".json">
+            <div class="bt-drop-icon">⬇</div>
+            <div class="bt-drop-text">Drop strategy .json</div>
+            <div class="bt-drop-hint">or click to browse</div>
+          </div>
+          <div id="btFileLoaded" class="bt-file-loaded" style="display:none">
+            <span class="bt-file-dot"></span>
+            <span class="bt-file-name" id="btFileName"></span>
+            <button class="bt-file-clear" onclick="clearJsonFile()" title="Remove">✕</button>
+          </div>
+          <div class="bt-info-panel" id="btInfoPanel">
+            <div class="bt-info-header" onclick="toggleInfoPanel()">
+              <span class="bt-info-tag">FORMAT</span>
+              <span class="bt-info-title">Reference</span>
+              <span class="bt-info-chevron" id="btInfoChevron">▾</span>
+            </div>
+            <div class="bt-info-body" id="btInfoBody">
+              <div class="bt-info-inner">
+                <div class="bt-info-content">
+                  <div class="bt-info-code"><span class="ic-punc">{</span>
+  <span class="ic-key">"buy"</span><span class="ic-punc">:  [</span><span class="ic-str">"close &gt; sma20"</span><span class="ic-punc">,</span> <span class="ic-str">"rsi14 &lt; 30"</span><span class="ic-punc">],</span>
+  <span class="ic-key">"sell"</span><span class="ic-punc">: [</span><span class="ic-str">"close &lt; sma20"</span><span class="ic-punc">,</span> <span class="ic-str">"rsi14 &gt; 70"</span><span class="ic-punc">]</span>
+<span class="ic-punc">}</span></div>
+                  <div>
+                    <div class="bt-info-rule"><strong>Arrays = AND</strong> · all conditions must pass</div>
+                    <div class="bt-info-sub">Fields</div>
+                    <div class="bt-info-chips">
+                      <span class="bt-chip">close</span><span class="bt-chip">open</span>
+                      <span class="bt-chip">high</span><span class="bt-chip">low</span>
+                    </div>
+                    <div class="bt-info-sub">Indicators</div>
+                    <div class="bt-info-chips">
+                      <span class="bt-chip">sma20</span><span class="bt-chip">sma50</span>
+                      <span class="bt-chip">rsi14</span>
+                    </div>
+                    <div class="bt-info-sub">Operators</div>
+                    <div class="bt-info-chips">
+                      <span class="bt-chip">&gt;</span><span class="bt-chip">&lt;</span>
+                      <span class="bt-chip">&gt;=</span><span class="bt-chip">&lt;=</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <hr class="divider">
+
+        <div class="bt-row">
+          <div class="field-group" style="flex:1">
+            <div class="sidebar-label">Capital</div>
+            <input id="btCash"  type="number" placeholder="Rs" value="10000" min="1" step="any">
+          </div>
+          <div class="field-group" style="flex:0 0 76px">
+            <div class="sidebar-label">Years</div>
+            <input id="btYears" type="number" placeholder="Yrs" value="10" min="1" max="30" step="1">
+          </div>
+        </div>
+
+        <button class="btn-primary btn-run" id="btRunBtn" onclick="runBacktest()">Run Backtest</button>
+      </div>
+
+    </aside>
+
+    <main class="main">
+
+      <div class="main-section active" id="mainMarket">
+        <div class="main-title">Price Lookup</div>
+
+        <div id="priceTableWrap" class="table-wrap" style="display:none">
+          <table id="resultsTable">
             <thead>
               <tr>
                 <th>Symbol</th>
-                <th>Qty</th>
-                <th>Buy Price</th>
-                <th>Current</th>
-                <th>Value</th>
-                <th>P/L (Rs)</th>
-                <th>P/L (%)</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody id="portfolioBody"></tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-
-    <!-- ── Backtesting ──────────────────────────────── -->
-    <section class="section">
-      <div class="section-header">
-        <span class="section-num">04</span>
-        <span class="section-title">Backtesting</span>
-      </div>
-
-      <div class="sub-label">Strategy Parameters</div>
-      <div class="bt-form">
-        <div class="search-wrap">
-          <input id="btSymbol" type="text" placeholder="Symbol…" autocomplete="off">
-          <div id="btDropdown" class="sym-dropdown" style="display:none"></div>
-        </div>
-
-        <select id="btStrategy" onchange="onBtStrategyChange()">
-          <option value="ma">MA Crossover</option>
-          <option value="custom">Custom</option>
-        </select>
-
-        <span id="btMAControls" style="display:contents">
-          <input id="btFast"  type="number" placeholder="Fast MA"  value="5"     min="1" step="1">
-          <input id="btSlow"  type="number" placeholder="Slow MA"  value="20"    min="2" step="1">
-        </span>
-
-        <input id="btCash"  type="number" placeholder="Capital"  value="10000" min="1" step="any">
-        <button class="btn-primary" id="btRunBtn" onclick="runBacktest()">Run</button>
-      </div>
-
-      <div id="btCustomControls" style="display:none">
-        <div class="bt-expr-row">
-          <div>
-            <div class="sub-label">Buy when</div>
-            <input id="btBuyExpr"  type="text" placeholder="close > sma20" autocomplete="off">
-          </div>
-          <div>
-            <div class="sub-label">Sell when</div>
-            <input id="btSellExpr" type="text" placeholder="close < sma20" autocomplete="off">
-          </div>
-        </div>
-        <p class="bt-syntax-hint">Variables: close · open · high · low · smaX &nbsp;|&nbsp; Operators: &gt; &lt; &gt;= &lt;=</p>
-      </div>
-
-      <div id="btMessage" class="message"></div>
-
-      <div id="btResults" class="bt-results" style="display:none">
-        <!-- Stats -->
-        <div class="bt-stats">
-          <div class="bt-stat">
-            <span class="bt-stat-label">Total Return</span>
-            <span class="bt-stat-value" id="btReturn">—</span>
-          </div>
-          <div class="bt-stat">
-            <span class="bt-stat-label">Final Balance</span>
-            <span class="bt-stat-value" id="btBalance">—</span>
-          </div>
-          <div class="bt-stat">
-            <span class="bt-stat-label">Trades</span>
-            <span class="bt-stat-value" id="btTrades">—</span>
-          </div>
-          <div class="bt-stat">
-            <span class="bt-stat-label">Win Rate</span>
-            <span class="bt-stat-value" id="btWinRate">—</span>
-          </div>
-        </div>
-
-        <!-- Equity curve -->
-        <div class="sub-label">Equity Curve</div>
-        <div class="bt-equity-box" id="btEquityBox">
-          <canvas id="btEquityChart"></canvas>
-        </div>
-
-        <!-- Trade log -->
-        <div class="sub-label mt">Trade Log</div>
-        <div class="bt-table-wrap">
-          <table id="btTradeTable">
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Action</th>
                 <th>Price</th>
-                <th>Shares</th>
-                <th>Profit</th>
+                <th>Change</th>
+                <th>Time</th>
               </tr>
             </thead>
-            <tbody id="btTradeBody"></tbody>
+            <tbody id="tableBody"></tbody>
           </table>
         </div>
-      </div>
-    </section>
+        <div id="priceMeta" class="meta"></div>
 
-  </main>
+        <section id="chartSection" style="display:none">
+          <div class="main-title" style="margin-top:.5rem">
+            <span id="chartTitle">Chart</span>
+          </div>
+          <div id="chartStatus" class="chart-status"></div>
+          <div class="chart-box" id="chartBox" style="display:none">
+            <div class="chart-info-line" id="chartInfoLine"></div>
+            <canvas id="priceChart"></canvas>
+          </div>
+        </section>
+      </div>
+
+      <div class="main-section" id="mainPortfolio">
+        <div class="main-title">
+          Portfolio
+          <span class="auto-badge" id="autoBadge" style="display:none">
+            <span class="live-dot"></span> Live
+          </span>
+        </div>
+
+        <div id="portfolioMessage" class="message" style="margin-bottom:.65rem"></div>
+
+        <div id="portfolioWrap" style="display:none">
+          <div class="port-summary">
+            <div class="port-stat">
+              <span class="port-stat-label">Total Value</span>
+              <span class="port-stat-value" id="totalValue">—</span>
+            </div>
+            <div class="port-stat">
+              <span class="port-stat-label">Invested</span>
+              <span class="port-stat-value" id="totalInvested">—</span>
+            </div>
+            <div class="port-stat">
+              <span class="port-stat-label">Profit / Loss</span>
+              <span class="port-stat-value" id="totalProfit">—</span>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table id="portfolioTable">
+              <thead>
+                <tr>
+                  <th>Symbol</th><th>Qty</th><th>Buy</th>
+                  <th>Current</th><th>Value</th>
+                  <th>P/L (Rs)</th><th>P/L (%)</th><th></th>
+                </tr>
+              </thead>
+              <tbody id="portfolioBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="main-section" id="mainBacktest">
+        <div class="main-title">Backtest Results</div>
+        <div id="btMessage" class="message" style="margin-bottom:.65rem"></div>
+
+        <div id="btResults" style="display:none">
+          <div class="bt-stats">
+            <div class="bt-stat">
+              <span class="bt-stat-label">Total Return</span>
+              <span class="bt-stat-value" id="btReturn">—</span>
+            </div>
+            <div class="bt-stat">
+              <span class="bt-stat-label">Final Balance</span>
+              <span class="bt-stat-value" id="btBalance">—</span>
+            </div>
+            <div class="bt-stat">
+              <span class="bt-stat-label">Trades</span>
+              <span class="bt-stat-value" id="btTrades">—</span>
+            </div>
+            <div class="bt-stat">
+              <span class="bt-stat-label">Win Rate</span>
+              <span class="bt-stat-value" id="btWinRate">—</span>
+            </div>
+          </div>
+
+          <div class="sub-label">Equity Curve</div>
+          <div class="bt-equity-box" id="btEquityBox">
+            <canvas id="btEquityChart"></canvas>
+          </div>
+
+          <div class="sub-label mt">Trade Log</div>
+          <div class="bt-table-wrap">
+            <table id="btTradeTable">
+              <thead>
+                <tr>
+                  <th>Date</th><th>Action</th><th>Price</th>
+                  <th>Shares</th><th>Profit</th>
+                </tr>
+              </thead>
+              <tbody id="btTradeBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
 
   <script>
-    // ── State ────────────────────────────────────────
+    function showSection(name) {
+      ['market', 'portfolio', 'backtest'].forEach(s => {
+        const cap = s.charAt(0).toUpperCase() + s.slice(1);
+        document.getElementById('side' + cap).classList.toggle('active', s === name);
+        document.getElementById('main' + cap).classList.toggle('active', s === name);
+      });
+      document.querySelectorAll('.nav-btn').forEach(b =>
+        b.classList.toggle('active', b.dataset.section === name)
+      );
+    }
+    document.querySelectorAll('.nav-btn').forEach(b =>
+      b.addEventListener('click', () => showSection(b.dataset.section))
+    );
+
     const portfolios = { paper: [], real: [] };
     let activeMode = 'paper';
 
-    // ── Price Checker ────────────────────────────────
     async function fetchPrices() {
       const symbolsInput = document.getElementById('symbolsInput');
       const message      = document.getElementById('priceMessage');
@@ -931,19 +1161,20 @@
           const changeClass = change > 0 ? 'positive' : change < 0 ? 'negative' : '';
           const changeText  = change > 0 ? `+${change}` : `${change}`;
           const time        = new Date(row.timestamp * 1000).toLocaleTimeString();
-          tbody.insertAdjacentHTML('beforeend', `
-            <tr>
-              <td class="sym">${row.symbol}</td>
-              <td>${row.price}</td>
-              <td class="${changeClass}">${changeText}</td>
-              <td>${time}</td>
-            </tr>
-          `);
+          const tr          = document.createElement('tr');
+          tr.innerHTML = `
+            <td class="sym">${row.symbol}</td>
+            <td>${row.price}</td>
+            <td class="${changeClass}">${changeText}</td>
+            <td>${time}</td>
+          `;
+          tbody.appendChild(tr);
+          tr.classList.add('flash');
+          setTimeout(() => tr.classList.remove('flash'), 800);
         }
 
         tableWrap.style.display = 'block';
-        tableWrap.classList.add('fade-in');
-        meta.textContent = `${json.count} of ${json.requested} symbols fetched · server time ${new Date(json.serverTime * 1000).toLocaleTimeString()}`;
+        meta.textContent = `${json.count} of ${json.requested} symbols · ${new Date(json.serverTime * 1000).toLocaleTimeString()}`;
       } catch {
         message.textContent = 'Could not reach the API. Is the server running?';
       }
@@ -956,7 +1187,6 @@
       if (!val.includes(',') && /^[A-Z0-9]+$/i.test(val)) loadChart(val.toUpperCase());
     });
 
-    // ── Portfolio: mode switching ─────────────────────
     function switchMode(mode) {
       activeMode = mode;
       document.getElementById('tabPaper').classList.toggle('active', mode === 'paper');
@@ -972,7 +1202,6 @@
       }
     }
 
-    // ── Portfolio: add position ───────────────────────
     function addPosition() {
       const symbol   = document.getElementById('posSymbol').value.trim().toUpperCase();
       const quantity = parseFloat(document.getElementById('posQty').value);
@@ -985,11 +1214,9 @@
 
       msg.textContent = '';
       portfolios[activeMode].push({ symbol, quantity, buyPrice });
-
       document.getElementById('posSymbol').value   = '';
       document.getElementById('posQty').value      = '';
       document.getElementById('posBuyPrice').value = '';
-
       savePortfolio(activeMode);
     }
 
@@ -1027,7 +1254,6 @@
       }
     }
 
-    // ── Portfolio: calculate ──────────────────────────
     async function calculatePortfolio() {
       const positions = portfolios[activeMode];
       const msg  = document.getElementById('portfolioMessage');
@@ -1049,10 +1275,7 @@
           msg.textContent = 'No results returned. All symbols may have failed.'; return;
         }
 
-        // ── Compute totals from returned positions (single source of truth) ──
-        let totalValue    = 0;
-        let totalInvested = 0;
-        let totalProfit   = 0;
+        let totalValue = 0, totalInvested = 0, totalProfit = 0;
 
         const tbody = document.getElementById('portfolioBody');
         tbody.innerHTML = json.positions.map(p => {
@@ -1065,10 +1288,10 @@
           totalInvested += invested;
           totalProfit   += profit;
 
-          const cls      = profit > 0 ? 'positive' : profit < 0 ? 'negative' : '';
-          const rsSign   = profit >= 0 ? '+' : '';
-          const pctSign  = profitPct >= 0 ? '+' : '';
-          const origIdx  = positions.findIndex(op => op.symbol === p.symbol);
+          const cls     = profit > 0 ? 'positive' : profit < 0 ? 'negative' : '';
+          const rsSign  = profit >= 0 ? '+' : '';
+          const pctSign = profitPct >= 0 ? '+' : '';
+          const origIdx = positions.findIndex(op => op.symbol === p.symbol);
 
           return `<tr>
             <td class="sym">${p.symbol}</td>
@@ -1082,15 +1305,12 @@
           </tr>`;
         }).join('');
 
-        // ── Update summary (derived from same numbers) ──
-        const overallPct  = totalInvested > 0 ? (totalProfit / totalInvested * 100) : 0;
-        const profitSign  = totalProfit >= 0 ? '+' : '';
-        const pctSign     = overallPct >= 0 ? '+' : '';
+        const overallPct = totalInvested > 0 ? (totalProfit / totalInvested * 100) : 0;
+        const profitSign = totalProfit >= 0 ? '+' : '';
+        const pctSign    = overallPct >= 0 ? '+' : '';
 
-        document.getElementById('totalValue').textContent =
-          'Rs ' + totalValue.toFixed(2);
-        document.getElementById('totalInvested').textContent =
-          'Rs ' + totalInvested.toFixed(2);
+        document.getElementById('totalValue').textContent    = 'Rs ' + totalValue.toFixed(2);
+        document.getElementById('totalInvested').textContent = 'Rs ' + totalInvested.toFixed(2);
 
         const profitEl = document.getElementById('totalProfit');
         profitEl.textContent = `${profitSign}Rs ${Math.abs(totalProfit).toFixed(2)} (${pctSign}${overallPct.toFixed(2)}%)`;
@@ -1103,7 +1323,6 @@
       }
     }
 
-    // ── Auto-refresh every 10 s ───────────────────────
     let autoRefreshTimer = null;
 
     function startAutoRefresh() {
@@ -1119,12 +1338,10 @@
       autoRefreshTimer = null;
       document.getElementById('autoBadge').style.display = 'none';
     }
-    // ── Symbol search factory ─────────────────────────
-    // onPick(symbol) is called when user selects a result.
+
     function makeSearch(input, dropdown, onPick) {
       let items = [], hiIdx = -1, timer = null;
 
-      // Delegated click via mousedown (fires before blur)
       dropdown.addEventListener('mousedown', e => {
         const row = e.target.closest('[data-symbol]');
         if (!row) return;
@@ -1133,14 +1350,12 @@
         close();
       });
 
-      // Click outside closes
       document.addEventListener('click', e => {
         if (!input.contains(e.target) && !dropdown.contains(e.target)) close();
       });
 
       input.addEventListener('input', () => {
         clearTimeout(timer);
-        // Only autocomplete when typing a single symbol (no commas)
         const raw = input.value;
         const q   = raw.includes(',') ? '' : raw.trim();
         if (!q) { close(); return; }
@@ -1203,7 +1418,6 @@
       }
     }
 
-    // Price lookup search: select → fill input → fetch + chart
     makeSearch(
       document.getElementById('symbolsInput'),
       document.getElementById('priceDropdown'),
@@ -1214,7 +1428,6 @@
       }
     );
 
-    // Portfolio search: select → fill symbol → focus qty
     makeSearch(
       document.getElementById('posSymbol'),
       document.getElementById('symDropdown'),
@@ -1224,55 +1437,75 @@
       }
     );
 
-    // Backtest symbol search: select → fill input
     makeSearch(
       document.getElementById('btSymbol'),
       document.getElementById('btDropdown'),
       symbol => { document.getElementById('btSymbol').value = symbol; }
     );
 
-    // ── Chart ─────────────────────────────────────────
     let chartInstance = null;
     let chartSymbol   = '';
-    let chartInterval = '1m';
+
+    const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+    function fmtDay(ts) {
+      const d = new Date(ts * 1000);
+      return `${d.getDate()} ${MONTHS[d.getMonth()]}`;
+    }
+
+    function fmtDayFull(ts) {
+      const d = new Date(ts * 1000);
+      return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+    }
 
     async function loadChart(symbol) {
       chartSymbol = symbol;
 
-      const section = document.getElementById('chartSection');
-      const status  = document.getElementById('chartStatus');
-      const box     = document.getElementById('chartBox');
+      const section  = document.getElementById('chartSection');
+      const status   = document.getElementById('chartStatus');
+      const box      = document.getElementById('chartBox');
+      const infoLine = document.getElementById('chartInfoLine');
 
       document.getElementById('chartTitle').textContent = symbol;
       section.style.display = 'block';
       if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
-      status.textContent    = 'Loading…';
-      status.style.display  = 'block';
-      box.style.display     = 'none';
+      status.textContent   = 'Loading…';
+      status.style.display = 'block';
+      box.style.display    = 'none';
+      infoLine.textContent = '';
 
       try {
-        const res = await fetch(`/history/${encodeURIComponent(symbol)}?interval=${chartInterval}&range=1d`);
+        const res = await fetch(`/history-daily/${encodeURIComponent(symbol)}`);
         const raw = await res.json();
 
-        // Dedupe by time, drop malformed, sort ascending
         const seen = new Set();
         const candles = (Array.isArray(raw) ? raw : [])
-          .filter(c => c && Number.isFinite(c.time) && Number.isFinite(c.close))
+          .filter(c => c && !c.isSynthetic && Number.isFinite(c.time) && Number.isFinite(c.close) && c.close > 0)
           .filter(c => { if (seen.has(c.time)) return false; seen.add(c.time); return true; })
           .sort((a, b) => a.time - b.time);
 
-        if (candles.length === 0) {
-          status.textContent = 'No data available';
-          return;
+        if (candles.length === 0) { status.textContent = 'No data available'; return; }
+
+        for (let i = 1; i < candles.length; i++) {
+          if (candles[i].time <= candles[i - 1].time) {
+            status.textContent = 'Invalid or corrupted market data';
+            console.error('[PSX] Chart: non-increasing timestamps at index', i);
+            return;
+          }
         }
 
-        const labels = candles.map(c =>
-          new Date(c.time * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
+        const hasOHLC = candles.some(c =>
+          Number.isFinite(c.open) && Number.isFinite(c.high) && Number.isFinite(c.low) &&
+          (c.open !== c.close || c.high !== c.close || c.low !== c.close)
         );
 
+        const labels = candles.map(c => fmtDay(c.time));
+
         status.style.display = 'none';
-        box.innerHTML        = '<canvas id="priceChart"></canvas>';
+        box.innerHTML        = '<div class="chart-info-line" id="chartInfoLine"></div><canvas id="priceChart"></canvas>';
         box.style.display    = 'block';
+
+        const infoEl = document.getElementById('chartInfoLine');
 
         chartInstance = new Chart(
           document.getElementById('priceChart').getContext('2d'),
@@ -1282,50 +1515,55 @@
               labels,
               datasets: [{
                 data: candles.map(c => c.close),
-                borderColor: '#c9a03a',
-                borderWidth: 1.5,
+                borderColor: '#00D97E',
+                borderWidth: 1.8,
                 pointRadius: 0,
-                tension: 0.1,
-                fill: false,
+                tension: 0.2,
+                fill: { target: 'origin', above: 'rgba(0,217,126,.06)' },
               }],
             },
             options: {
               responsive: true,
               maintainAspectRatio: false,
-              animation: false,
+              animation: { duration: 500, easing: 'easeOutQuart' },
               interaction: { mode: 'index', intersect: false },
               scales: {
                 x: {
                   ticks: {
-                    color: '#30404f',
+                    color: '#44445A',
                     font: { family: "'JetBrains Mono', monospace", size: 10 },
-                    maxTicksLimit: 8,
+                    maxTicksLimit: 10,
                     maxRotation: 0,
                   },
-                  grid:   { color: '#1a2230' },
-                  border: { color: '#1a2230' },
+                  grid:   { color: '#1A1A22' },
+                  border: { color: '#26262E' },
                 },
                 y: {
                   position: 'right',
                   ticks: {
-                    color: '#6a7e94',
+                    color: '#8888A0',
                     font: { family: "'JetBrains Mono', monospace", size: 10 },
                   },
-                  grid:   { color: '#1a2230' },
-                  border: { color: '#1a2230' },
+                  grid:   { color: '#1A1A22' },
+                  border: { color: '#26262E' },
                 },
               },
               plugins: {
                 legend: { display: false },
                 tooltip: {
-                  backgroundColor: '#0c1018',
-                  borderColor:     '#263040',
-                  borderWidth: 1,
-                  titleColor: '#6a7e94',
-                  bodyColor:  '#d8e4f0',
-                  titleFont: { family: "'JetBrains Mono', monospace", size: 10 },
-                  bodyFont:  { family: "'JetBrains Mono', monospace", size: 11 },
-                  callbacks: { label: c => `Rs ${c.parsed.y.toFixed(2)}` },
+                  enabled: false,
+                  external(context) {
+                    if (!infoEl) return;
+                    if (context.tooltip.opacity === 0) { infoEl.textContent = ''; return; }
+                    const idx = context.tooltip.dataPoints?.[0]?.dataIndex;
+                    if (idx == null) return;
+                    const c = candles[idx];
+                    let text = `${fmtDayFull(c.time)}   Rs ${c.close.toFixed(2)}`;
+                    if (hasOHLC && Number.isFinite(c.open) && Number.isFinite(c.high) && Number.isFinite(c.low)) {
+                      text += `   H ${c.high.toFixed(2)}  L ${c.low.toFixed(2)}`;
+                    }
+                    infoEl.textContent = text;
+                  },
                 },
               },
             },
@@ -1339,55 +1577,156 @@
       }
     }
 
-    function setChartInterval(iv) {
-      chartInterval = iv;
-      document.querySelectorAll('#intervalGroup .ctrl-btn').forEach(b =>
-        b.classList.toggle('active', b.textContent === iv)
-      );
-      if (chartSymbol) loadChart(chartSymbol);
-    }
-
-    // ── Backtesting ───────────────────────────────────
     let equityChartInstance = null;
+    let loadedJsonStrategy  = null;
+    let infoPanelOpen       = true;
 
     function onBtStrategyChange() {
       const strategy = document.getElementById('btStrategy').value;
       document.getElementById('btMAControls').style.display     = strategy === 'ma'     ? 'contents' : 'none';
       document.getElementById('btCustomControls').style.display = strategy === 'custom' ? 'block'    : 'none';
+      document.getElementById('btJsonControls').style.display   = strategy === 'json'   ? 'block'    : 'none';
+    }
+
+    function toggleInfoPanel() {
+      infoPanelOpen = !infoPanelOpen;
+      document.getElementById('btInfoBody').classList.toggle('collapsed', !infoPanelOpen);
+      document.getElementById('btInfoChevron').style.transform = infoPanelOpen ? '' : 'rotate(-90deg)';
+    }
+
+    function handleJsonFile(file) {
+      const msg = document.getElementById('btMessage');
+      msg.textContent = '';
+      if (!file || !file.name.endsWith('.json')) { msg.textContent = 'Please select a .json file.'; return; }
+
+      const reader = new FileReader();
+      reader.onload = e => {
+        let parsed;
+        try { parsed = JSON.parse(e.target.result); }
+        catch { msg.textContent = 'Invalid JSON — could not parse the file.'; return; }
+
+        const hasBuy  = parsed.buy  && (typeof parsed.buy  === 'string' || (Array.isArray(parsed.buy)  && parsed.buy.length  > 0));
+        const hasSell = parsed.sell && (typeof parsed.sell === 'string' || (Array.isArray(parsed.sell) && parsed.sell.length > 0));
+
+        if (!hasBuy || !hasSell) {
+          msg.textContent = 'Invalid strategy — JSON must have non-empty "buy" and "sell" fields.'; return;
+        }
+
+        loadedJsonStrategy = parsed;
+        document.getElementById('btFileName').textContent = file.name;
+        document.getElementById('btFileLoaded').style.display = 'flex';
+        document.getElementById('btDropZone').style.display   = 'none';
+        if (parsed.name) msg.textContent = `Loaded: ${parsed.name}`;
+      };
+      reader.readAsText(file);
+    }
+
+    function clearJsonFile() {
+      loadedJsonStrategy = null;
+      document.getElementById('btFileLoaded').style.display = 'none';
+      document.getElementById('btDropZone').style.display   = 'block';
+      document.getElementById('btFileInput').value          = '';
+      document.getElementById('btMessage').textContent      = '';
+    }
+
+    document.getElementById('btFileInput').addEventListener('change', e => handleJsonFile(e.target.files[0]));
+
+    const dropZone = document.getElementById('btDropZone');
+    dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+    dropZone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropZone.classList.remove('drag-over');
+      handleJsonFile(e.dataTransfer.files[0]);
+    });
+
+    function buildBacktestBody(symbol, strategy, cash, years) {
+      if (strategy === 'ma') {
+        const fast = parseInt(document.getElementById('btFast').value) || 5;
+        const slow = parseInt(document.getElementById('btSlow').value) || 20;
+        return { ok: fast < slow, body: { symbol, strategy, fast, slow, cash, years },
+                 err: fast >= slow ? 'Fast MA must be less than Slow MA.' : null };
+      }
+      if (strategy === 'custom') {
+        const buyExpr  = document.getElementById('btBuyExpr').value.trim();
+        const sellExpr = document.getElementById('btSellExpr').value.trim();
+        if (!buyExpr)  return { ok: false, err: 'Enter a buy condition.' };
+        if (!sellExpr) return { ok: false, err: 'Enter a sell condition.' };
+        return { ok: true, body: { symbol, strategy, buyExpr, sellExpr, cash, years } };
+      }
+      if (strategy === 'json') {
+        if (!loadedJsonStrategy) return { ok: false, err: 'Drop a strategy .json file first.' };
+        return { ok: true, body: { symbol, strategy: 'json', jsonStrategy: loadedJsonStrategy, cash, years } };
+      }
+      return { ok: false, err: 'Unknown strategy type.' };
     }
 
     async function runBacktest() {
       const symbol   = document.getElementById('btSymbol').value.trim().toUpperCase();
       const cash     = parseFloat(document.getElementById('btCash').value) || 10000;
+      const years    = parseInt(document.getElementById('btYears').value)  || 10;
       const strategy = document.getElementById('btStrategy').value;
       const msg      = document.getElementById('btMessage');
       const btn      = document.getElementById('btRunBtn');
 
+      msg.className   = 'message';
       msg.textContent = '';
       document.getElementById('btResults').style.display = 'none';
 
-      if (!symbol || !/^[A-Z0-9]+$/.test(symbol)) {
-        msg.textContent = 'Enter a valid symbol.'; return;
-      }
+      if (!symbol || !/^[A-Z0-9]+$/.test(symbol)) { msg.textContent = 'Enter a valid symbol.'; return; }
 
-      let body;
-      if (strategy === 'ma') {
-        const fast = parseInt(document.getElementById('btFast').value) || 5;
-        const slow = parseInt(document.getElementById('btSlow').value) || 20;
-        if (fast >= slow) { msg.textContent = 'Fast MA must be less than Slow MA.'; return; }
-        body = { symbol, strategy, fast, slow, cash };
-      } else {
-        const buyExpr  = document.getElementById('btBuyExpr').value.trim();
-        const sellExpr = document.getElementById('btSellExpr').value.trim();
-        if (!buyExpr)  { msg.textContent = 'Enter a buy condition.';  return; }
-        if (!sellExpr) { msg.textContent = 'Enter a sell condition.'; return; }
-        body = { symbol, strategy, buyExpr, sellExpr, cash };
-      }
+      const built = buildBacktestBody(symbol, strategy, cash, years);
+      if (!built.ok) { msg.textContent = built.err; return; }
 
       btn.disabled    = true;
       btn.textContent = 'Running…';
+      showSection('backtest');
 
       try {
+        const res  = await fetch('/backtest', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(built.body),
+        });
+        const data = await res.json();
+
+        if (res.status === 404 && data.error?.includes('No data file')) {
+          await fetchDataAndRun(symbol, built.body, btn, msg); return;
+        }
+
+        if (!res.ok) { msg.textContent = data.error || `Error ${res.status}`; return; }
+        renderBacktestResults(data);
+
+      } catch (err) {
+        msg.textContent = 'Could not reach the API. Is the server running?';
+      } finally {
+        btn.disabled    = false;
+        btn.textContent = 'Run Backtest';
+      }
+    }
+
+    async function fetchDataAndRun(symbol, body, btn, msg) {
+      msg.className   = 'message info';
+      msg.textContent = `No local data for ${symbol} — fetching from PSX… (~10 s)`;
+      btn.textContent = 'Fetching…';
+
+      try {
+        const fetchRes  = await fetch('/api/fetch-data', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ symbol }),
+        });
+        const fetchData = await fetchRes.json();
+
+        if (!fetchRes.ok) {
+          msg.className = 'message';
+          msg.textContent = fetchData.error || 'Failed to fetch data. Check your network.';
+          return;
+        }
+
+        msg.textContent = `Data ready — ${fetchData.candles} candles up to ${fetchData.lastDate}. Running backtest…`;
+        btn.textContent = 'Running…';
+
         const res  = await fetch('/backtest', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1395,74 +1734,75 @@
         });
         const data = await res.json();
 
-        if (!res.ok) { msg.textContent = data.error || `Error ${res.status}`; return; }
-
+        if (!res.ok) { msg.className = 'message'; msg.textContent = data.error || `Error ${res.status}`; return; }
+        msg.textContent = '';
         renderBacktestResults(data);
+
       } catch (err) {
-        msg.textContent = 'Could not reach the API. Is the server running?';
-      } finally {
-        btn.disabled    = false;
-        btn.textContent = 'Run';
+        msg.className   = 'message';
+        msg.textContent = 'Network error during data fetch.';
       }
     }
 
     function renderBacktestResults(r) {
-      // Stats
       const retPct = (r.totalReturn * 100).toFixed(2) + '%';
       const retEl  = document.getElementById('btReturn');
       retEl.textContent = (r.totalReturn >= 0 ? '+' : '') + retPct;
       retEl.className   = 'bt-stat-value ' + (r.totalReturn > 0 ? 'positive' : r.totalReturn < 0 ? 'negative' : '');
 
-      document.getElementById('btBalance').textContent  = 'Rs ' + r.finalBalance.toLocaleString();
-      document.getElementById('btTrades').textContent   = r.totalTrades;
-      document.getElementById('btWinRate').textContent  = (r.winRate * 100).toFixed(1) + '%';
+      document.getElementById('btBalance').textContent = 'Rs ' + r.finalBalance.toLocaleString();
+      document.getElementById('btTrades').textContent  = r.totalTrades;
+      document.getElementById('btWinRate').textContent = (r.winRate * 100).toFixed(1) + '%';
 
-      // Equity chart
       if (equityChartInstance) { equityChartInstance.destroy(); equityChartInstance = null; }
       document.getElementById('btEquityBox').innerHTML = '<canvas id="btEquityChart"></canvas>';
       const ctx = document.getElementById('btEquityChart').getContext('2d');
+
       equityChartInstance = new Chart(ctx, {
         type: 'line',
         data: {
           labels: r.equityCurve.map(p => new Date(p.time * 1000).toISOString().slice(0, 10)),
           datasets: [{
             data: r.equityCurve.map(p => p.equity),
-            borderColor: '#34c96a',
-            borderWidth: 1.5,
+            borderColor: '#00D97E',
+            borderWidth: 1.8,
             pointRadius: 0,
-            fill: false,
-            tension: 0.1,
+            fill: { target: 'origin', above: 'rgba(0,217,126,.07)' },
+            tension: 0.2,
           }],
         },
         options: {
           responsive: true,
           maintainAspectRatio: false,
-          animation: false,
+          animation: { duration: 500, easing: 'easeOutQuart' },
           interaction: { mode: 'index', intersect: false },
           scales: {
             x: {
               ticks: {
-                color: '#30404f',
+                color: '#44445A',
                 font: { family: "'JetBrains Mono', monospace", size: 10 },
                 maxTicksLimit: 6,
                 maxRotation: 0,
               },
-              grid: { color: '#1a2230' }, border: { color: '#1a2230' },
+              grid: { color: '#1A1A22' }, border: { color: '#26262E' },
             },
             y: {
               position: 'right',
               ticks: {
-                color: '#6a7e94',
+                color: '#8888A0',
                 font: { family: "'JetBrains Mono', monospace", size: 10 },
               },
-              grid: { color: '#1a2230' }, border: { color: '#1a2230' },
+              grid: { color: '#1A1A22' }, border: { color: '#26262E' },
             },
           },
           plugins: {
             legend: { display: false },
             tooltip: {
-              backgroundColor: '#0c1018', borderColor: '#263040', borderWidth: 1,
-              titleColor: '#6a7e94', bodyColor: '#d8e4f0',
+              backgroundColor: '#14141A',
+              borderColor: '#26262E',
+              borderWidth: 1,
+              titleColor: '#8888A0',
+              bodyColor: '#F2F2F6',
               titleFont: { family: "'JetBrains Mono', monospace", size: 10 },
               bodyFont:  { family: "'JetBrains Mono', monospace", size: 11 },
               callbacks: { label: c => `Rs ${c.parsed.y.toLocaleString()}` },
@@ -1471,12 +1811,11 @@
         },
       });
 
-      // Trade log table
       const tbody = document.getElementById('btTradeBody');
       tbody.innerHTML = r.tradeLog.map(t => {
         const isBuy    = t.action === 'BUY';
         const profitTd = isBuy
-          ? `<td class="sym" style="color:var(--text-3)">—</td>`
+          ? `<td style="color:var(--text3)">—</td>`
           : `<td class="${t.profit >= 0 ? 'positive' : 'negative'}">${t.profit >= 0 ? '+' : ''}Rs ${t.profit.toLocaleString()}</td>`;
         return `<tr>
           <td>${t.date}</td>

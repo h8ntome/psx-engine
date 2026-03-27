@@ -1,10 +1,11 @@
 import express from 'express';
 import open from 'open';
 import { existsSync, readFileSync } from 'fs';
+import { execFileSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import db from './db.js';
-import { run as runBacktest, makeMAStrategy, makeCustomStrategy, validateCustomStrategy } from './backtest.js';
+import { run as runBacktest, ensureData, makeMAStrategy, makeCustomStrategy, validateCustomStrategy, makeJsonStrategy, validateJsonStrategy } from './backtest.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -385,15 +386,37 @@ app.get('/history-daily/:symbol', (req, res) => {
   }
 });
 
+// POST /api/fetch-data — scrape + clean data for a symbol
+app.post('/api/fetch-data', (req, res) => {
+  const { symbol } = req.body ?? {};
+  if (!symbol || !/^[A-Z0-9]+$/i.test(symbol))
+    return res.status(400).json({ error: 'Invalid or missing symbol' });
+
+  const sym = symbol.toUpperCase();
+  try {
+    ensureData(sym);
+    // Return the last candle date so the UI can confirm freshness
+    const dataPath = join(__dirname, 'data', `${sym}.json`);
+    const candles  = JSON.parse(readFileSync(dataPath, 'utf8'));
+    const last     = candles.at(-1);
+    const lastDate = last ? new Date(last.time * 1000).toISOString().slice(0, 10) : null;
+    res.json({ ok: true, symbol: sym, candles: candles.length, lastDate });
+  } catch (err) {
+    console.error(`[PSX] /api/fetch-data error for ${sym}:`, err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /backtest — run a backtest and return results
 app.post('/backtest', (req, res) => {
   const {
     symbol,
-    strategy   = 'ma',
-    fast       = 5,
-    slow       = 20,
-    cash       = 10_000,
+    strategy     = 'ma',
+    fast         = 5,
+    slow         = 20,
+    cash         = 10_000,
     positionSize = 0.5,
+    years        = 10,
   } = req.body ?? {};
 
   if (!symbol || !/^[A-Z0-9]+$/i.test(symbol))
@@ -402,6 +425,7 @@ app.post('/backtest', (req, res) => {
   const {
     buyExpr,
     sellExpr,
+    jsonStrategy,
   } = req.body ?? {};
 
   let strategyFn;
@@ -420,15 +444,22 @@ app.post('/backtest', (req, res) => {
     if (errs.length) return res.status(400).json({ error: errs.join(' | ') });
     strategyFn = makeCustomStrategy({ buy: buyExpr, sell: sellExpr });
 
+  } else if (strategy === 'json') {
+    if (!jsonStrategy)
+      return res.status(400).json({ error: 'JSON strategy requires a jsonStrategy field' });
+    const errs = validateJsonStrategy(jsonStrategy);
+    if (errs.length) return res.status(400).json({ error: errs.join(' | ') });
+    strategyFn = makeJsonStrategy(jsonStrategy);
+
   } else {
-    return res.status(400).json({ error: `Unknown strategy "${strategy}". Supported: ma, custom` });
+    return res.status(400).json({ error: `Unknown strategy "${strategy}". Supported: ma, custom, json` });
   }
 
   try {
     const result = runBacktest(
       symbol.toUpperCase(),
       strategyFn,
-      { startCash: Number(cash) || 10_000, positionSize: Number(positionSize) || 0.5 }
+      { startCash: Number(cash) || 10_000, positionSize: Number(positionSize) || 0.5, years: Number(years) || 10 }
     );
     res.json(result);
   } catch (err) {
