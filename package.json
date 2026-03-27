@@ -1,6 +1,6 @@
 {
   "name": "psx-engine",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Open-source PSX trading engine — live market data, portfolio tracking, and backtesting",
   "type": "module",
   "main": "index.js",
@@ -9,13 +9,18 @@
   },
   "scripts": {
     "start": "node index.js",
-    "dev":   "node index.js"
+    "dev": "node index.js"
   },
   "engines": {
     "node": ">=18.0.0"
   },
   "keywords": [
-    "psx", "pakistan", "stocks", "backtesting", "trading", "finance"
+    "psx",
+    "pakistan",
+    "stocks",
+    "backtesting",
+    "trading",
+    "finance"
   ],
   "license": "MIT",
   "dependencies": {
