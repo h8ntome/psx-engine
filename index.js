@@ -6,14 +6,17 @@ import { dirname, join } from 'path';
 import db from './db.js';
 import { run as runBacktest, ensureData, makeMAStrategy, makeCustomStrategy, validateCustomStrategy, makeJsonStrategy, validateJsonStrategy } from './backtest.js';
 
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+console.log('[PSX] Starting...');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const PSX_API = 'https://psxterminal.com/api/ticks/REG';
 const DPS_API = 'https://dps.psx.com.pk/timeseries/int';
 const FETCH_TIMEOUT_MS = 5000;
-const MAX_SYMBOLS = 30;
+const MAX_SYMBOLS = 10;
 
 const INTERVAL_MS = {
   '1m':  60_000,
@@ -104,7 +107,11 @@ async function refreshSymbolCache() {
   }
 }
 
-refreshSymbolCache().catch(err => {
+console.log('[PSX] Loading data...');
+console.log('[PSX] Calling refreshSymbolCache...');
+refreshSymbolCache().then(() => {
+  console.log('[PSX] Symbol cache ready');
+}).catch(err => {
   console.error('[PSX] Symbol cache init failed:', err.message);
 });
 setInterval(refreshSymbolCache, SYMBOL_CACHE_TTL_MS);
@@ -137,6 +144,8 @@ function buildCandles(ticks, intervalMs, sinceMs) {
     )
     .sort((a, b) => a[0] - b[0]);
 
+  console.log(`[PSX] buildCandles: ${ticks.length} raw ticks → ${sorted.length} valid in range`);
+
   const candles = new Map();
 
   for (const [ts, price, volume] of sorted) {
@@ -148,12 +157,21 @@ function buildCandles(ticks, intervalMs, sinceMs) {
       const c = candles.get(bucketTs);
       if (price > c.high) c.high = price;
       if (price < c.low)  c.low  = price;
-      c.close   = price;
+      c.close   = price;       // last tick in sorted order = correct close
       c.volume += volume;
     }
   }
 
-  return [...candles.values()].sort((a, b) => a.time - b.time);
+  const result = [...candles.values()].sort((a, b) => a.time - b.time);
+
+  if (result.length > 0) {
+    console.log(`[PSX] buildCandles: ${result.length} candles generated`);
+    console.log(`[PSX] buildCandles sample[0]:`, JSON.stringify(result[0]));
+  } else {
+    console.warn('[PSX] buildCandles: no candles produced');
+  }
+
+  return result;
 }
 
 async function fetchSymbol(symbol) {
@@ -210,14 +228,7 @@ app.get('/prices', async (req, res) => {
     return res.status(400).json({ error: 'No valid symbols provided' });
   }
 
-  // Fetch in batches of 5 with a 120ms gap to avoid rate-limiting
-  const results = [];
-  for (let i = 0; i < validSymbols.length; i += 5) {
-    const batch = validSymbols.slice(i, i + 5);
-    const batchResults = await Promise.all(batch.map(fetchSymbol));
-    results.push(...batchResults);
-    if (i + 5 < validSymbols.length) await new Promise(r => setTimeout(r, 120));
-  }
+  const results = await Promise.all(validSymbols.map(fetchSymbol));
   const data = results.filter(Boolean);
 
   res.json({
@@ -504,6 +515,9 @@ app.use((err, req, res, _next) => {
   console.error('[PSX] Error:', err.message);
   res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
 });
+
+console.log('[PSX] Initializing server...');
+console.log('[PSX] About to start server...');
 
 function openBrowser(url) {
   if (process.platform === 'win32') {
