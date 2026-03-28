@@ -1,6 +1,6 @@
 {
   "name": "psx-engine",
-  "version": "1.0.1",
+  "version": "1.1.1",
   "description": "Open-source PSX trading engine — live market data, portfolio tracking, and backtesting",
   "type": "module",
   "main": "index.js",

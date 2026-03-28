@@ -10,12 +10,12 @@
 
 ## Features
 
-- **Live Market Data** — Real-time PSX tick data with candlestick charts across multiple timeframes (1D, 1W, 1M)
+- **Live Market Data** — Real-time PSX prices with candlestick charts across 1D, 1W, and 1M timeframes; each timeframe switch fetches fresh data with correct date filtering and aggregation
 - **Auto Analysis** — When you select a symbol, technical indicators load automatically below the chart: performance metrics, moving averages, RSI gauge, volume analysis, and support/resistance levels
 - **Portfolio Tracker** — Track paper and real portfolios with live P&L calculations
 - **Backtesting Engine** — Test strategies against multi-year historical OHLC data
 - **Strategy System** — Built-in MA crossover strategy plus support for custom expression-based and JSON-defined strategies
-- **Symbol Search** — Full PSX symbol search with company name resolution
+- **Symbol Search** — Full PSX symbol search with company name resolution; click any ticker in the top bar to jump straight to its chart
 - **Reliable CLI** — `psx-engine` starts with clear progress logs, auto-opens the browser, and handles errors (port conflicts, database lock) gracefully
 
 ---
@@ -89,8 +89,10 @@ Three strategy types are supported via the web UI and API:
 | `POST` | `/backtest` | Run a backtest and return results |
 | `GET` | `/api/analyze/:symbol` | Run Python technical analysis (performance, SMAs, RSI, S/R) |
 
-**Supported intervals:** `1m`, `5m`, `15m`, `1h`, `1d`
-**Supported ranges:** `1d`, `1w`, `1m`, `3m`, `1y`
+**Supported intervals for `/history`:** `1m`, `5m`, `15m`, `1h`, `1d`
+**Supported ranges for `/history`:** `1d`, `1w`, `1m`, `3m`, `1y`
+
+> Note: The web UI uses `/history-daily` for all chart timeframes (1D/1W/1M) with client-side aggregation. Intraday intervals are available via the API only.
 
 ---
 
