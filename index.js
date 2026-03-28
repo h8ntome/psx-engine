@@ -8,14 +8,12 @@ import { run as runBacktest, ensureData, makeMAStrategy, makeCustomStrategy, val
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-console.log('[PSX] Starting...');
-
 const app = express();
 const PORT = process.env.PORT || 3000;
 const PSX_API = 'https://psxterminal.com/api/ticks/REG';
 const DPS_API = 'https://dps.psx.com.pk/timeseries/int';
 const FETCH_TIMEOUT_MS = 5000;
-const MAX_SYMBOLS = 10;
+const MAX_SYMBOLS = 30;
 
 const INTERVAL_MS = {
   '1m':  60_000,
@@ -106,8 +104,9 @@ async function refreshSymbolCache() {
   }
 }
 
-console.log('[PSX] Loading data...');
-refreshSymbolCache();
+refreshSymbolCache().catch(err => {
+  console.error('[PSX] Symbol cache init failed:', err.message);
+});
 setInterval(refreshSymbolCache, SYMBOL_CACHE_TTL_MS);
 
 async function fetchTimeseries(symbol) {
@@ -138,8 +137,6 @@ function buildCandles(ticks, intervalMs, sinceMs) {
     )
     .sort((a, b) => a[0] - b[0]);
 
-  console.log(`[PSX] buildCandles: ${ticks.length} raw ticks → ${sorted.length} valid in range`);
-
   const candles = new Map();
 
   for (const [ts, price, volume] of sorted) {
@@ -151,21 +148,12 @@ function buildCandles(ticks, intervalMs, sinceMs) {
       const c = candles.get(bucketTs);
       if (price > c.high) c.high = price;
       if (price < c.low)  c.low  = price;
-      c.close   = price;       // last tick in sorted order = correct close
+      c.close   = price;
       c.volume += volume;
     }
   }
 
-  const result = [...candles.values()].sort((a, b) => a.time - b.time);
-
-  if (result.length > 0) {
-    console.log(`[PSX] buildCandles: ${result.length} candles generated`);
-    console.log(`[PSX] buildCandles sample[0]:`, JSON.stringify(result[0]));
-  } else {
-    console.warn('[PSX] buildCandles: no candles produced');
-  }
-
-  return result;
+  return [...candles.values()].sort((a, b) => a.time - b.time);
 }
 
 async function fetchSymbol(symbol) {
@@ -222,7 +210,14 @@ app.get('/prices', async (req, res) => {
     return res.status(400).json({ error: 'No valid symbols provided' });
   }
 
-  const results = await Promise.all(validSymbols.map(fetchSymbol));
+  // Fetch in batches of 5 with a 120ms gap to avoid rate-limiting
+  const results = [];
+  for (let i = 0; i < validSymbols.length; i += 5) {
+    const batch = validSymbols.slice(i, i + 5);
+    const batchResults = await Promise.all(batch.map(fetchSymbol));
+    results.push(...batchResults);
+    if (i + 5 < validSymbols.length) await new Promise(r => setTimeout(r, 120));
+  }
   const data = results.filter(Boolean);
 
   res.json({
@@ -510,8 +505,6 @@ app.use((err, req, res, _next) => {
   res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
 });
 
-console.log('[PSX] Initializing server...');
-
 function openBrowser(url) {
   if (process.platform === 'win32') {
     execFile('cmd', ['/c', 'start', url]);
@@ -535,4 +528,12 @@ server.on('error', (err) => {
     console.error('[PSX] Server failed to start:', err.message);
   }
   process.exit(1);
+});
+
+process.on('unhandledRejection', (err) => {
+  console.error('[PSX] Unhandled Rejection:', err);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('[PSX] Uncaught Exception:', err);
 });
