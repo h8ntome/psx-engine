@@ -1268,7 +1268,7 @@
       buildTickerSet(document.getElementById('tickerSetA'));
       buildTickerSet(document.getElementById('tickerSetB'));
       updateTickerData();
-      setInterval(updateTickerData, 15000);
+      setInterval(updateTickerData, 8000);
     }
 
     async function updateTickerData() {
@@ -1306,7 +1306,7 @@
       showSection('market');
       document.getElementById('symbolsInput').value = symbol;
       fetchPrices();
-      loadChart(symbol);
+      loadChart(symbol, chartTimeframe);
     }
 
     initTicker();
@@ -1364,8 +1364,10 @@
     document.getElementById('symbolsInput').addEventListener('keydown', e => {
       if (e.key !== 'Enter') return;
       fetchPrices();
-      const val = document.getElementById('symbolsInput').value.trim();
-      if (!val.includes(',') && /^[A-Z0-9]+$/i.test(val)) loadChart(val.toUpperCase());
+      const val = document.getElementById('symbolsInput').value.trim().toUpperCase();
+      if (val && !val.includes(',') && /^[A-Z0-9]+$/.test(val)) {
+        loadChart(val, chartTimeframe);
+      }
     });
 
     function switchMode(mode) {
@@ -1605,7 +1607,7 @@
       symbol => {
         document.getElementById('symbolsInput').value = symbol;
         fetchPrices();
-        loadChart(symbol);
+        loadChart(symbol, chartTimeframe);
       }
     );
 
@@ -1639,6 +1641,7 @@
     function fmtLabel(ts, tf) {
       const d = new Date(ts * 1000);
       if (tf === '1M') return `${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+      if (tf === '1W') return `${MONTHS[d.getMonth()]} '${String(d.getFullYear()).slice(2)}`;
       return `${d.getDate()} ${MONTHS[d.getMonth()]}`;
     }
 
@@ -1650,63 +1653,107 @@
         const startW1 = new Date(jan4);
         startW1.setDate(jan4.getDate() - ((jan4.getDay() + 6) % 7));
         const week = Math.floor((d - startW1) / (7 * 86400000)) + 1;
-        const key  = `${d.getFullYear()}-W${week}`;
+        const key  = `${d.getFullYear()}-W${String(week).padStart(2,'0')}`;
         if (!buckets.has(key)) buckets.set(key, []);
         buckets.get(key).push(c);
       }
-      return [...buckets.values()].map(g => ({
-        time:   g[0].time,
-        open:   g[0].open,
-        close:  g[g.length - 1].close,
-        high:   Math.max(...g.map(c => c.high)),
-        low:    Math.min(...g.map(c => c.low)),
-        volume: g.reduce((s, c) => s + (c.volume || 0), 0),
-      })).sort((a, b) => a.time - b.time);
+      return [...buckets.values()].map(g => {
+        const sorted = g.slice().sort((a, b) => a.time - b.time);
+        return {
+          time:   sorted[0].time,
+          open:   Number.isFinite(sorted[0].open)  ? sorted[0].open  : sorted[0].close,
+          close:  sorted[sorted.length - 1].close,
+          high:   Math.max(...sorted.map(c => Number.isFinite(c.high) ? c.high : c.close)),
+          low:    Math.min(...sorted.map(c => Number.isFinite(c.low)  ? c.low  : c.close)),
+          volume: sorted.reduce((s, c) => s + (c.volume || 0), 0),
+        };
+      }).sort((a, b) => a.time - b.time);
     }
 
     function aggregateMonthly(candles) {
       const buckets = new Map();
       for (const c of candles) {
         const d = new Date(c.time * 1000);
-        const key = `${d.getFullYear()}-${d.getMonth()}`;
+        const key = `${d.getFullYear()}-${String(d.getMonth()).padStart(2,'0')}`;
         if (!buckets.has(key)) buckets.set(key, []);
         buckets.get(key).push(c);
       }
-      return [...buckets.values()].map(g => ({
-        time:   g[0].time,
-        open:   g[0].open,
-        close:  g[g.length - 1].close,
-        high:   Math.max(...g.map(c => c.high)),
-        low:    Math.min(...g.map(c => c.low)),
-        volume: g.reduce((s, c) => s + (c.volume || 0), 0),
-      })).sort((a, b) => a.time - b.time);
+      return [...buckets.values()].map(g => {
+        const sorted = g.slice().sort((a, b) => a.time - b.time);
+        return {
+          time:   sorted[0].time,
+          open:   Number.isFinite(sorted[0].open)  ? sorted[0].open  : sorted[0].close,
+          close:  sorted[sorted.length - 1].close,
+          high:   Math.max(...sorted.map(c => Number.isFinite(c.high) ? c.high : c.close)),
+          low:    Math.min(...sorted.map(c => Number.isFinite(c.low)  ? c.low  : c.close)),
+          volume: sorted.reduce((s, c) => s + (c.volume || 0), 0),
+        };
+      }).sort((a, b) => a.time - b.time);
+    }
+
+    // ── Chart pipeline helpers ───────────────────────────
+
+    function updateTFButtons(tf) {
+      ['1m','1D','1W','1M'].forEach(t => {
+        const btn = document.getElementById(`tf-${t}`);
+        if (btn) btn.classList.toggle('active', t === tf);
+      });
+    }
+
+    function setTFButtonsDisabled(disabled) {
+      ['1D','1W','1M'].forEach(t => {
+        const btn = document.getElementById(`tf-${t}`);
+        if (btn) btn.disabled = disabled;
+      });
+    }
+
+    // Deduplicate, drop invalid candles, sort ascending by time.
+    function validateCandles(raw) {
+      const seen = new Set();
+      return (Array.isArray(raw) ? raw : [])
+        .filter(c =>
+          c && !c.isSynthetic &&
+          Number.isFinite(c.time) &&
+          Number.isFinite(c.close) && c.close > 0
+        )
+        .filter(c => {
+          if (seen.has(c.time)) return false;
+          seen.add(c.time);
+          return true;
+        })
+        .sort((a, b) => a.time - b.time);
+    }
+
+    // Filter by date range for the timeframe, then aggregate if needed.
+    // Option A: 1D = last 60 days (daily), 1W = last 2 years (weekly), 1M = all (monthly).
+    function filterAndAggregate(validated, tf) {
+      const now = Date.now() / 1000;
+      let filtered = validated;
+      if (tf === '1D') {
+        const cutoff = now - 60 * 86400;
+        filtered = validated.filter(c => c.time >= cutoff);
+      } else if (tf === '1W') {
+        const cutoff = now - 2 * 365 * 86400;
+        filtered = validated.filter(c => c.time >= cutoff);
+      }
+      if (tf === '1W') return aggregateWeekly(filtered);
+      if (tf === '1M') return aggregateMonthly(filtered);
+      return filtered;
     }
 
     function setTimeframe(tf) {
       if (tf === '1m') return; // disabled — no intraday source
+      if (!chartSymbol) return;
       chartTimeframe = tf;
-      ['1m','1D','1W','1M'].forEach(t => {
-        document.getElementById(`tf-${t}`)?.classList.toggle('active', t === tf);
-      });
-      renderChart();
+      loadChart(chartSymbol, tf);
     }
 
-    function renderChart() {
+    // Pure render: receives already-filtered+aggregated candles and the timeframe label.
+    function renderChart(candles, tf) {
+      if (!candles || candles.length === 0) return;
+
       const status = document.getElementById('chartStatus');
       const box    = document.getElementById('chartBox');
-
-      let candles;
-      if      (chartTimeframe === '1D') candles = chartDailyCandles;
-      else if (chartTimeframe === '1W') candles = aggregateWeekly(chartDailyCandles);
-      else if (chartTimeframe === '1M') candles = aggregateMonthly(chartDailyCandles);
-      else return;
-
-      if (!candles || candles.length === 0) {
-        status.textContent   = 'No historical data available';
-        status.style.display = 'block';
-        box.style.display    = 'none';
-        return;
-      }
 
       if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
 
@@ -1715,7 +1762,7 @@
       box.style.display    = 'block';
 
       const infoEl  = document.getElementById('chartInfoLine');
-      const labels  = candles.map(c => fmtLabel(c.time, chartTimeframe));
+      const labels  = candles.map(c => fmtLabel(c.time, tf));
       const hasOHLC = candles.some(c =>
         Number.isFinite(c.open) && Number.isFinite(c.high) && Number.isFinite(c.low) &&
         (c.open !== c.close || c.high !== c.close || c.low !== c.close)
@@ -1772,6 +1819,7 @@
                   const idx = context.tooltip.dataPoints?.[0]?.dataIndex;
                   if (idx == null) return;
                   const c = candles[idx];
+                  // Tooltip and axis both derive from c.time — same source, no conversion mismatch.
                   let text = `${fmtDayFull(c.time)}   Rs ${c.close.toFixed(2)}`;
                   if (hasOHLC && Number.isFinite(c.open) && Number.isFinite(c.high) && Number.isFinite(c.low)) {
                     text += `   H ${c.high.toFixed(2)}  L ${c.low.toFixed(2)}`;
@@ -1784,18 +1832,20 @@
         }
       );
 
-      // Scroll chart into view so user sees it without manually scrolling
       document.getElementById('chartSection')
         ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
 
-    async function loadChart(symbol) {
-      chartSymbol       = symbol;
-      chartDailyCandles = [];
-      chartTimeframe    = '1D';
-      apSetState('hidden');
+    // Single entry point for all chart operations.
+    // tf defaults to current chartTimeframe (or '1D' for a brand-new load).
+    async function loadChart(symbol, tf) {
+      if (!tf) tf = chartTimeframe || '1D';
 
-      // Ensure market section is visible (chart lives there)
+      const newSymbol = symbol !== chartSymbol;
+      chartSymbol    = symbol;
+      chartTimeframe = tf;
+
+      // Ensure market section is visible
       if (!document.getElementById('mainMarket').classList.contains('active')) {
         showSection('market');
       }
@@ -1805,39 +1855,49 @@
       const box      = document.getElementById('chartBox');
       const controls = document.getElementById('chartControls');
 
+      // Show section and title immediately
+      section.style.display  = 'block';
       document.getElementById('chartTitle').textContent = symbol;
-      section.style.display   = 'block';
-      controls.style.display  = 'none';
+
+      // Show loading state: clear chart, show status, disable TF buttons
       if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+      box.style.display    = 'none';
       status.textContent   = 'Loading…';
       status.style.display = 'block';
-      box.style.display    = 'none';
 
-      // Reset timeframe buttons
-      ['1m','1D','1W','1M'].forEach(t => {
-        document.getElementById(`tf-${t}`)?.classList.toggle('active', t === '1D');
-      });
+      // Show controls so user sees TF buttons, but disable them during fetch
+      controls.style.display = 'flex';
+      setTFButtonsDisabled(true);
+      updateTFButtons(tf);
+
+      if (newSymbol) {
+        chartDailyCandles = [];
+        apSetState('hidden');
+      }
 
       try {
         const res = await fetch(`/history-daily/${encodeURIComponent(symbol)}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const raw = await res.json();
 
-        const seen = new Set();
-        const candles = (Array.isArray(raw) ? raw : [])
-          .filter(c => c && !c.isSynthetic && Number.isFinite(c.time) && Number.isFinite(c.close) && c.close > 0)
-          .filter(c => { if (seen.has(c.time)) return false; seen.add(c.time); return true; })
-          .sort((a, b) => a.time - b.time);
+        const validated = validateCandles(raw);
+        const candles   = filterAndAggregate(validated, tf);
+
+        setTFButtonsDisabled(false);
 
         if (candles.length === 0) {
-          status.textContent = 'No historical data available';
+          status.textContent   = `No chart data available for ${symbol}`;
+          status.style.display = 'block';
+          box.style.display    = 'none';
           return;
         }
 
-        chartDailyCandles      = candles;
-        controls.style.display = 'flex';
-        renderChart();
-        loadAnalysis(symbol);
+        chartDailyCandles = validated;
+        renderChart(candles, tf);
+
+        if (newSymbol) loadAnalysis(symbol);
       } catch (err) {
+        setTFButtonsDisabled(false);
         status.textContent   = 'Failed to load chart data';
         status.style.display = 'block';
         box.style.display    = 'none';
